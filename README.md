@@ -6,6 +6,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 
 - [Fix NTFS Partition Nemo Action](#fix-ntfs-partition-nemo-action)
 - [Papirus Folder Color](#papirus-folder-color)
+- [H.264 Video Playback Codecs](#h264-video-playback-codecs)
 - [Panel Configurations](Panel/)
 - [Text Extractor](Text%20Extractor/)
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
@@ -44,4 +45,17 @@ for theme in Papirus Papirus-Dark Papirus-Light; do
 done
 nemo -q
 ```
+
+---
+
+# H.264 Video Playback Codecs
+
+If you want H.264 video playback support (or experience playback issues with MP4/H.264 videos in media players or browsers), run:
+
+```bash
+sudo apt update && sudo apt install libavcodec-extra60 ffmpeg
+```
+
+See [Media Codecs](Media%20Codecs/) for more info or the helper script.
+
 
