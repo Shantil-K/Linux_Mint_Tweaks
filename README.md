@@ -7,6 +7,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Fix NTFS Partition Nemo Action](#fix-ntfs-partition-nemo-action)
 - [Papirus Folder Color](#papirus-folder-color)
 - [H.264 Video Playback Codecs](#h264-video-playback-codecs)
+- [Package Dependencies Report](#package-dependencies-report)
 - [Panel Configurations](Panel/)
 - [Text Extractor](Text%20Extractor/)
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
@@ -70,5 +71,20 @@ sudo apt update && sudo apt install libavcodec-extra60 ffmpeg
 ```
 
 See [Media Codecs](Media%20Codecs/) for more info or the helper script.
+
+---
+
+# Package Dependencies Report
+
+Export forward and reverse dependency trees for all manually installed packages on your system.
+
+See [Package Dependencies](Package%20Dependencies/) for prerequisites and the complete script.
+
+### Quick Start
+```bash
+sudo apt update && sudo apt install -y apt-rdepends
+./"Package Dependencies"/export_dependencies.sh
+```
+
 
 
