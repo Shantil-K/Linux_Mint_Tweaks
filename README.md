@@ -8,6 +8,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Papirus Folder Color](#papirus-folder-color)
 - [H.264 Video Playback Codecs](#h264-video-playback-codecs)
 - [Package Dependencies Report](#package-dependencies-report)
+- [Firefox Touchpad Zoom & Smooth Scrolling (X11)](#firefox-touchpad-zoom--smooth-scrolling-x11)
 - [Panel Configurations](Panel/)
 - [Text Extractor](Text%20Extractor/)
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
@@ -99,4 +100,19 @@ See [Windows 10 Theme Tweaks](Windows%2010%20Theme%20Tweaks/) for details.
 ```bash
 cd "Windows 10 Theme Tweaks" && ./install.sh
 ```
+
+---
+
+# Firefox Touchpad Zoom & Smooth Scrolling (X11)
+
+Enables pinch-to-zoom gestures, smooth kinetic scrolling, and touchscreen gestures in Firefox, Waterfox, and other Gecko browsers on X11 by setting `MOZ_USE_XINPUT2=1` systemwide.
+
+See [Firefox Zoom (X11)](Firefox%20Zoom%20(X11)/) for the helper script and verification instructions.
+
+### Quick Command (Systemwide)
+```bash
+grep -qxF 'MOZ_USE_XINPUT2=1' /etc/environment || echo 'MOZ_USE_XINPUT2=1' | sudo tee -a /etc/environment
+```
+*(Log out and log back in for changes to take effect across all application menus and launchers).*
+
 
