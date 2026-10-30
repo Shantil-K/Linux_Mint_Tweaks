@@ -11,6 +11,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Panel Configurations](Panel/)
 - [Text Extractor](Text%20Extractor/)
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
+- [Windows 10 Theme Tweaks](#windows-10-theme-tweaks)
 
 ---
 
@@ -86,5 +87,16 @@ sudo apt update && sudo apt install -y apt-rdepends
 ./"Package Dependencies"/export_dependencies.sh
 ```
 
+---
 
+# Windows 10 Theme Tweaks
+
+A small app that fixes the Windows-10-Dark GTK theme's title bar buttons (so the close button's red highlight fills the corner) and gives the theme a Mint green accent, dark checkboxes with a green tick, and green main buttons.
+
+See [Windows 10 Theme Tweaks](Windows%2010%20Theme%20Tweaks/) for details.
+
+### Quick Start
+```bash
+cd "Windows 10 Theme Tweaks" && ./install.sh
+```
 

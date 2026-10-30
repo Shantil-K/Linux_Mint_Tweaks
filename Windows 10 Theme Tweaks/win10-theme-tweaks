@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""Windows 10 Theme Tweaks
+
+Applies a set of tweaks to the Windows-10-Dark GTK theme on Linux Mint
+Cinnamon, always starting from an untouched copy of the theme:
+
+  - Title bar buttons fill to the window corners (32px title bars)
+  - Mint green accent instead of Windows blue
+  - Flat buttons in title bars (no border box)
+  - Mint green main action buttons (e.g. "Take Screenshot")
+  - No dashed focus outline
+  - Force the theme on every app (even ones that switch in dark mode)
+
+The first time it sees a theme folder without its marker file, it saves a
+copy of that folder as the "original". Every Apply restores that original
+and then applies the selected tweaks, so applying twice is safe. If the
+theme is reinstalled or updated (marker gone), the new copy becomes the
+original.
+
+Run without arguments for the window, or with --apply / --restore for the
+command line.
+"""
+
+import colorsys
+import glob
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+HOME = os.path.expanduser("~")
+DEFAULT_THEME = os.path.join(HOME, ".themes", "Windows-10-Dark")
+DATA_DIR = os.path.join(HOME, ".local", "share", "win10-theme-tweaks")
+MARKER = ".win10-tweaks-applied"
+PROFILE = os.path.join(HOME, ".profile")
+ENV_FILE = os.path.join(HOME, ".config", "environment.d", "90-gtk-theme.conf")
+MINT_GREEN = "#35A854"
+
+# ---------------------------------------------------------------- tweaks
+
+CSS_TITLEBAR = """
+/* Title bars drawn by apps themselves (headerbars): 32px tall, no padding,
+   so the minimize/maximize/close buttons reach the window edges. */
+headerbar.titlebar,
+.titlebar headerbar {
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: 0; }
+headerbar .titlebutton,
+.titlebar .titlebutton {
+  margin: 0;
+  border-radius: 0; }
+headerbar button.titlebutton.close,
+headerbar button.titlebutton.minimize,
+headerbar button.titlebutton.maximize {
+  padding: 8px 14px; }
+
+/* Other title bar buttons: keep them off the top and bottom edges. */
+headerbar.titlebar button:not(.titlebutton),
+.titlebar headerbar button:not(.titlebutton) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  min-height: 0;
+  padding-top: 2px;
+  padding-bottom: 2px; }
+
+/* Title bars drawn by Cinnamon's window manager: no padding at all. */
+window.ssd decoration headerbar.titlebar {
+  padding: 0; }
+window.ssd decoration headerbar.titlebar button.titlebutton {
+  margin: 0;
+  padding: 8px 14px; }
+"""
+
+CSS_FLAT_BUTTONS = """
+/* Flat title bar buttons (like the menu button): no border box. */
+headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action) {
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none; }
+headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):hover {
+  border-color: transparent;
+  background-color: rgba(255, 255, 255, 0.1); }
+headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):active,
+headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):checked {
+  border-color: transparent;
+  background-color: rgba(255, 255, 255, 0.2); }
+"""
+
+CSS_GREEN_BUTTON = """
+/* Mint green for the main action button (e.g. "Take Screenshot"). */
+button.suggested-action,
+headerbar button.suggested-action,
+button.suggested-action:backdrop,
+headerbar button.suggested-action:backdrop {
+  color: #FFFFFF;
+  background-color: #35A854;
+  background-image: none;
+  border-color: #35A854;
+  box-shadow: none; }
+button.suggested-action:hover,
+headerbar button.suggested-action:hover {
+  background-color: #42B862;
+  border-color: #42B862;
+  box-shadow: none; }
+button.suggested-action:active,
+headerbar button.suggested-action:active {
+  background-color: #2D9147;
+  border-color: #2D9147; }
+button.suggested-action:disabled,
+headerbar button.suggested-action:disabled {
+  color: #8c8c8c;
+  background-color: #2e2e2e;
+  border-color: #2e2e2e; }
+"""
+
+CSS_NO_FOCUS = """
+/* No dashed focus outline. */
+* {
+  outline-style: none;
+  outline-width: 0; }
+"""
+
+# (key, label, description, default)
+OPTIONS = [
+    ("titlebar", "Title bar buttons fill the corners",
+     "32px title bars; close/minimize/maximize reach the window edges", True),
+    ("green", "Mint green accent",
+     "Replace Windows blue with Mint green (selections, checkboxes, sliders)", True),
+    ("flat", "Flat title bar buttons",
+     "No border box around buttons like the ⋮ menu", True),
+    ("checkbox", "Dark checkboxes with green tick",
+     "Checkboxes get a dark background and a Mint green tick", True),
+    ("greenbutton", "Green main buttons",
+     "Main action buttons such as \"Take Screenshot\" in Mint green", True),
+    ("nofocus", "Remove dashed focus outline",
+     "Note: you won't see which item has keyboard focus", True),
+    ("force", "Use this theme in every app",
+     "Stops apps switching to the GNOME look in dark mode (needs log out)", True),
+    ("restart", "Restart Cinnamon after applying",
+     "Updates title bars drawn by Cinnamon (windows stay open)", True),
+]
+
+# ---------------------------------------------------------------- helpers
+
+
+def snapshot_path(theme):
+    return os.path.join(DATA_DIR, os.path.basename(theme.rstrip("/")) + "-original.tar.gz")
+
+
+def ensure_original(theme, log):
+    """Save the theme as the original unless it's already been tweaked."""
+    snap = snapshot_path(theme)
+    if os.path.exists(os.path.join(theme, MARKER)) and os.path.exists(snap):
+        return snap
+    if os.path.exists(os.path.join(theme, MARKER)):
+        raise RuntimeError(
+            "This theme was already changed, but its original copy is missing.\n"
+            "Reinstall the theme, then apply again.")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with tarfile.open(snap, "w:gz") as t:
+        t.add(theme, arcname=os.path.basename(theme.rstrip("/")))
+    log("Saved an original copy of the theme.")
+    return snap
+
+
+def restore_original(theme, log):
+    snap = snapshot_path(theme)
+    if not os.path.exists(snap):
+        raise RuntimeError("No original copy saved for this theme yet.")
+    parent = os.path.dirname(theme.rstrip("/"))
+    name = os.path.basename(theme.rstrip("/"))
+    with tempfile.TemporaryDirectory(dir=parent) as tmp:
+        with tarfile.open(snap) as t:
+            t.extractall(tmp, filter="data") if hasattr(tarfile, "data_filter") else t.extractall(tmp)
+        if os.path.exists(theme):
+            shutil.rmtree(theme)
+        shutil.move(os.path.join(tmp, name), theme)
+    log("Restored the original theme.")
+
+
+def gtk3_css(theme):
+    for p in ("gtk-3.20/gtk.css", "gtk-3.0/gtk.css"):
+        f = os.path.join(theme, p)
+        if os.path.exists(f):
+            return f
+    raise RuntimeError("No GTK3 stylesheet found in this theme.")
+
+
+GREEN_HUE = colorsys.rgb_to_hls(0x35 / 255, 0xA8 / 255, 0x54 / 255)[0]
+
+
+def _is_blue(r, g, b):
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    return s > 0.35 and 0.5 < h < 0.72 and l > 0.08
+
+
+def _to_green(r, g, b):
+    if (r, g, b) == (0x00, 0x78, 0xD7):  # Windows accent blue
+        return (0x35, 0xA8, 0x54)
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    r2, g2, b2 = colorsys.hls_to_rgb(GREEN_HUE, min(1, l + 0.013), s * 0.52)
+    return tuple(round(v * 255) for v in (r2, g2, b2))
+
+
+def recolor_green(theme, log):
+    def hexsub(m):
+        h = m.group(1)
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        return "#%02X%02X%02X" % _to_green(r, g, b) if _is_blue(r, g, b) else m.group(0)
+
+    def rgbsub(m):
+        r, g, b = map(int, m.groups()[1:4])
+        if not _is_blue(r, g, b):
+            return m.group(0)
+        return "%s(%d, %d, %d" % (m.group(1), *_to_green(r, g, b))
+
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
+        log("Pillow not installed: images (checkboxes etc.) stay blue.")
+
+    n = 0
+    for d in ("gtk-2.0", "gtk-3.0", "gtk-3.20", "gtk-4.0"):
+        for f in glob.glob(os.path.join(theme, d, "**", "*"), recursive=True):
+            if f.endswith((".css", ".svg", "gtkrc")):
+                s = open(f, encoding="utf-8", errors="surrogateescape").read()
+                t = re.sub(r"#([0-9a-fA-F]{6})\b", hexsub, s)
+                t = re.sub(r"(rgba?)\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", rgbsub, t)
+                if t != s:
+                    open(f, "w", encoding="utf-8", errors="surrogateescape").write(t)
+                    n += 1
+            elif f.endswith(".png") and Image:
+                im = Image.open(f).convert("RGBA")
+                px = im.load()
+                changed = False
+                for y in range(im.height):
+                    for x in range(im.width):
+                        r, g, b, a = px[x, y]
+                        if a and _is_blue(r, g, b):
+                            px[x, y] = (*_to_green(r, g, b), a)
+                            changed = True
+                if changed:
+                    im.save(f)
+                    n += 1
+    log(f"Recoloured {n} files to Mint green.")
+
+
+def set_force_theme(name, enabled, log):
+    """Add or remove GTK_THEME in ~/.profile and environment.d."""
+    tag = "# win10-theme-tweaks"
+    lines = open(PROFILE).read().splitlines() if os.path.exists(PROFILE) else []
+    lines = [l for l in lines if tag not in l
+             and not re.match(r"\s*export GTK_THEME=", l)
+             and l.strip() != "# Force the GTK theme for every app"]
+    if enabled:
+        lines.append(f"export GTK_THEME={name}  {tag}")
+    open(PROFILE, "w").write("\n".join(lines) + "\n")
+    if enabled:
+        os.makedirs(os.path.dirname(ENV_FILE), exist_ok=True)
+        open(ENV_FILE, "w").write(f"GTK_THEME={name}\n")
+    elif os.path.exists(ENV_FILE):
+        os.remove(ENV_FILE)
+    log("Every app will use this theme after you log out and back in." if enabled
+        else "Apps will follow the normal theme setting after you log out and back in.")
+
+
+def reload_gtk_theme(name):
+    for schema in ("org.cinnamon.desktop.interface", "org.gnome.desktop.interface"):
+        subprocess.run(["gsettings", "set", schema, "gtk-theme", "Adwaita"], check=False)
+    subprocess.run(["sleep", "1"])
+    for schema in ("org.cinnamon.desktop.interface", "org.gnome.desktop.interface"):
+        subprocess.run(["gsettings", "set", schema, "gtk-theme", name], check=False)
+
+
+def restart_cinnamon(log):
+    if "cinnamon" not in os.environ.get("XDG_CURRENT_DESKTOP", "").lower():
+        log("Not running Cinnamon; skipped restart.")
+        return
+    subprocess.Popen(["cinnamon", "--replace"], start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log("Restarting Cinnamon…")
+
+
+def dark_checkboxes(theme, log):
+    """Redraw the checkbox images: dark box, grey border, green tick."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        log("Pillow not installed: checkboxes not changed.")
+        return
+    BG, GREEN = (32, 32, 32), (53, 168, 84)
+    BORDER, BORDER_HOVER, BORDER_OFF = (140, 140, 140), (206, 206, 206), (77, 77, 77)
+    GREEN_OFF = (52, 92, 63)
+    SS = 8  # draw large, then shrink for smooth edges
+
+    def draw(size, border, mark, mark_color):
+        k = size / 13 * SS
+        im = Image.new("RGBA", (size * SS, size * SS), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rectangle([0, 0, size * SS - 1, size * SS - 1], fill=BG + (255,))
+        w = max(1, round(size / 13)) * SS
+        d.rectangle([0, 0, size * SS - 1, size * SS - 1], outline=border + (255,), width=w)
+        if mark == "tick":
+            d.line([(2.8 * k, 6.6 * k), (5.3 * k, 9.1 * k), (10.2 * k, 3.9 * k)],
+                   fill=mark_color + (255,), width=round(1.7 * k), joint="curve")
+        elif mark == "dash":
+            d.line([(3.5 * k, 6.5 * k), (9.5 * k, 6.5 * k)],
+                   fill=mark_color + (255,), width=round(2 * k))
+        return im.resize((size, size), Image.LANCZOS)
+
+    n = 0
+    for d in ("gtk-3.0", "gtk-3.20", "gtk-4.0"):
+        for f in glob.glob(os.path.join(theme, d, "**", "checkbox-*.png"), recursive=True):
+            name = os.path.basename(f)
+            size = Image.open(f).size[0]
+            mark = "tick" if "-checked" in name else "dash" if "-mixed" in name else None
+            if "insensitive" in name:
+                border, color = BORDER_OFF, GREEN_OFF
+            elif "-over" in name or "-active" in name:
+                border, color = BORDER_HOVER, GREEN
+            else:
+                border, color = BORDER, GREEN
+            draw(size, border, mark, color).save(f)
+            n += 1
+    log(f"Redrew {n} checkbox images.")
+
+
+def apply(theme, opts, log=print):
+    theme = os.path.abspath(theme)
+    name = os.path.basename(theme)
+    if not os.path.isdir(theme):
+        raise RuntimeError(f"Theme folder not found: {theme}")
+    ensure_original(theme, log)
+    restore_original(theme, log)
+
+    if opts.get("green"):
+        recolor_green(theme, log)
+    if opts.get("checkbox"):
+        dark_checkboxes(theme, log)
+    css = ""
+    if opts.get("titlebar"):
+        css += CSS_TITLEBAR
+    if opts.get("flat"):
+        css += CSS_FLAT_BUTTONS
+    if opts.get("greenbutton"):
+        css += CSS_GREEN_BUTTON
+    if opts.get("nofocus"):
+        css += CSS_NO_FOCUS
+    if css:
+        with open(gtk3_css(theme), "a") as f:
+            f.write("\n/* ===== win10-theme-tweaks ===== */\n" + css)
+        log("Added style tweaks.")
+    open(os.path.join(theme, MARKER), "w").write(
+        " ".join(k for k, v in opts.items() if v) + "\n")
+
+    set_force_theme(name, bool(opts.get("force")), log)
+    reload_gtk_theme(name)
+    log("Done. Reopen apps to see the changes.")
+    if opts.get("restart"):
+        restart_cinnamon(log)
+
+
+def restore(theme, log=print):
+    theme = os.path.abspath(theme)
+    restore_original(theme, log)
+    set_force_theme(os.path.basename(theme), False, log)
+    reload_gtk_theme(os.path.basename(theme))
+    log("Original theme restored. Reopen apps to see it.")
+
+# ---------------------------------------------------------------- window
+
+
+def run_gui():
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk, GLib
+
+    win = Gtk.Window(title="Windows 10 Theme Tweaks")
+    win.set_default_size(460, -1)
+    win.set_border_width(16)
+    win.connect("destroy", Gtk.main_quit)
+
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    win.add(box)
+
+    row = Gtk.Box(spacing=8)
+    row.pack_start(Gtk.Label(label="Theme folder", xalign=0), False, False, 0)
+    chooser = Gtk.FileChooserButton(title="Choose theme folder",
+                                    action=Gtk.FileChooserAction.SELECT_FOLDER)
+    if os.path.isdir(DEFAULT_THEME):
+        chooser.set_filename(DEFAULT_THEME)
+    else:
+        chooser.set_current_folder(os.path.join(HOME, ".themes"))
+    row.pack_start(chooser, True, True, 0)
+    box.pack_start(row, False, False, 0)
+
+    checks = {}
+    for key, label, desc, default in OPTIONS:
+        cb = Gtk.CheckButton()
+        lbl = Gtk.Label(xalign=0)
+        lbl.set_markup(f"{GLib.markup_escape_text(label)}\n"
+                       f"<small>{GLib.markup_escape_text(desc)}</small>")
+        lbl.set_line_wrap(True)
+        cb.add(lbl)
+        cb.set_active(default)
+        checks[key] = cb
+        box.pack_start(cb, False, False, 0)
+
+    status = Gtk.Label(xalign=0)
+    status.set_line_wrap(True)
+    status.set_selectable(True)
+    box.pack_start(status, False, False, 4)
+
+    buttons = Gtk.Box(spacing=8)
+    restore_btn = Gtk.Button(label="Restore original")
+    apply_btn = Gtk.Button(label="Apply")
+    apply_btn.get_style_context().add_class("suggested-action")
+    buttons.pack_end(apply_btn, False, False, 0)
+    buttons.pack_end(restore_btn, False, False, 0)
+    box.pack_end(buttons, False, False, 0)
+
+    messages = []
+
+    def log(msg):
+        messages.append(msg)
+        status.set_text("\n".join(messages))
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+
+    def run(fn):
+        messages.clear()
+        theme = chooser.get_filename()
+        if not theme:
+            log("Choose a theme folder first.")
+            return
+        apply_btn.set_sensitive(False)
+        restore_btn.set_sensitive(False)
+        try:
+            fn(theme)
+        except Exception as e:  # show any problem in the window
+            log(f"Error: {e}")
+        apply_btn.set_sensitive(True)
+        restore_btn.set_sensitive(True)
+
+    apply_btn.connect("clicked", lambda *_: run(
+        lambda t: apply(t, {k: c.get_active() for k, c in checks.items()}, log)))
+    restore_btn.connect("clicked", lambda *_: run(lambda t: restore(t, log)))
+
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    theme = next((a for a in args if not a.startswith("--")), DEFAULT_THEME)
+    if "--apply" in args:
+        apply(theme, {k: d for k, _, _, d in OPTIONS if not (k == "restart" and "--no-restart" in args)})
+    elif "--restore" in args:
+        restore(theme)
+    else:
+        run_gui()
