@@ -6,9 +6,9 @@ A small app that fixes up the [Windows-10-Dark](https://github.com/B00merang-Pro
 
 Each item is a checkbox in the app:
 
-- **Title bar buttons fill the corners**: 32px title bars, and the close/minimize/maximize hover highlight reaches the window's top and right edges. This works both for apps that draw their own title bar and for title bars drawn by Cinnamon.
+- **Title bar buttons fill the corners**: 32px title bars, and the close/minimize/maximize hover highlight reaches the window's top and right edges, with sharp (unstretched) icons. This works both for apps that draw their own title bar and for title bars drawn by Cinnamon.
 - **Mint green accent**: replaces Windows blue (`#0078D7`) with Mint green (`#35A854`) in selections, sliders, switches and other widgets.
-- **Dark checkboxes with green tick**: dark background, grey border, Mint green tick.
+- **Dark checkboxes, radio buttons and switches**: no white controls. Checkboxes and radio buttons get a dark background, grey border and a Mint green tick/dot; switches are grey when off; the selection-mode bar is Mint green instead of light grey.
 - **Green main buttons**: main action buttons like "Take Screenshot" are Mint green.
 - **Flat title bar buttons**: no border box around buttons like the ⋮ menu in title bars.
 - **Remove dashed focus outline**: no dotted border after clicking a button. You won't see which item has keyboard focus.

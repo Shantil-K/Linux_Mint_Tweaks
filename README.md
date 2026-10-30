@@ -91,7 +91,7 @@ sudo apt update && sudo apt install -y apt-rdepends
 
 # Windows 10 Theme Tweaks
 
-A small app that fixes the Windows-10-Dark GTK theme's title bar buttons (so the close button's red highlight fills the corner) and gives the theme a Mint green accent, dark checkboxes with a green tick, and green main buttons.
+A small app that fixes the Windows-10-Dark GTK theme's title bar buttons (so the close button's red highlight fills the corner) and gives the theme a Mint green accent, dark checkboxes, radio buttons and switches, and green main buttons.
 
 See [Windows 10 Theme Tweaks](Windows%2010%20Theme%20Tweaks/) for details.
 
