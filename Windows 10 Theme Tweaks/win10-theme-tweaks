@@ -5,9 +5,10 @@ Applies a set of tweaks to the Windows-10-Dark GTK theme on Linux Mint
 Cinnamon, always starting from an untouched copy of the theme:
 
   - Title bar buttons fill to the window corners (32px title bars)
-  - Mint green accent instead of Windows blue
-  - Flat buttons in title bars (no border box)
-  - Mint green main action buttons (e.g. "Take Screenshot")
+  - An accent colour of your choice (Mint's colours or custom) instead of
+    Windows blue
+  - Dark checkboxes, radio buttons and switches
+  - Grey plain buttons, flat title bar icon buttons, accent main buttons
   - No dashed focus outline
   - Force the theme on every app (even ones that switch in dark mode)
 
@@ -17,12 +18,19 @@ and then applies the selected tweaks, so applying twice is safe. If the
 theme is reinstalled or updated (marker gone), the new copy becomes the
 original.
 
-Run without arguments for the window, or with --apply / --restore for the
-command line.
+The Preview tab opens test windows with every kind of control, one for each
+kind of app Mint has: classic GTK3, GTK3 + libhandy, and GTK4 + libadwaita.
+
+Command line:
+  win10-theme-tweaks                       open the window
+  win10-theme-tweaks --apply [--no-restart] [--accent NAME|#RRGGBB]
+  win10-theme-tweaks --restore
+  win10-theme-tweaks --preview gtk3|handy|gtk4
 """
 
 import colorsys
 import glob
+import json
 import os
 import re
 import shutil
@@ -34,12 +42,74 @@ import tempfile
 HOME = os.path.expanduser("~")
 DEFAULT_THEME = os.path.join(HOME, ".themes", "Windows-10-Dark")
 DATA_DIR = os.path.join(HOME, ".local", "share", "win10-theme-tweaks")
+SETTINGS = os.path.join(DATA_DIR, "settings.json")
 MARKER = ".win10-tweaks-applied"
 PROFILE = os.path.join(HOME, ".profile")
 ENV_FILE = os.path.join(HOME, ".config", "environment.d", "90-gtk-theme.conf")
-MINT_GREEN = "#35A854"
+
+# Linux Mint's accent colours (from the Mint-Y themes).
+ACCENTS = [
+    ("Green", "#35A854"), ("Aqua", "#1F9EDE"), ("Blue", "#0C75DE"),
+    ("Teal", "#199CA8"), ("Purple", "#8C5DD9"), ("Pink", "#E54980"),
+    ("Red", "#E82127"), ("Orange", "#FF7139"), ("Sand", "#C5A07C"),
+    ("Grey", "#70737A"),
+]
+DEFAULT_ACCENT = "#35A854"
+
+# ---------------------------------------------------------------- colours
+
+
+def hex2rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb2hex(c):
+    return "#%02X%02X%02X" % tuple(max(0, min(255, round(v))) for v in c)
+
+
+def shade(hexcol, dl):
+    """Lighten (dl > 0) or darken (dl < 0) a colour."""
+    r, g, b = (v / 255 for v in hex2rgb(hexcol))
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    return rgb2hex(v * 255 for v in colorsys.hls_to_rgb(h, max(0, min(1, l + dl)), s))
+
+
+def mix(a, b, t):
+    """Blend colour a toward b by t (0..1)."""
+    a, b = hex2rgb(a), hex2rgb(b)
+    return rgb2hex(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+def text_on(hexcol):
+    """White or near-black text, whichever reads better on this colour."""
+    r, g, b = (v / 255 for v in hex2rgb(hexcol))
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return "#1A1A1A" if lum > 0.6 else "#FFFFFF"
+
+
+def accent_tokens(accent):
+    return {
+        "@ACCENT@": accent,
+        "@ACCENT_HOVER@": shade(accent, 0.06),
+        "@ACCENT_ACTIVE@": shade(accent, -0.06),
+        "@ACCENT_BAR@": shade(accent, -0.06),
+        "@ACCENT_TEXT@": text_on(accent),
+        "@ACCENT_DIM@": mix(accent, "#202020", 0.55),
+    }
+
+
+def fill(css, accent):
+    for k, v in accent_tokens(accent).items():
+        css = css.replace(k, v)
+    return css
+
+
+def accent_name(accent):
+    return next((n for n, c in ACCENTS if c.upper() == accent.upper()), accent.upper())
 
 # ---------------------------------------------------------------- tweaks
+
 
 CSS_TITLEBAR = """
 /* Title bars drawn by apps themselves (headerbars): 32px tall, no padding,
@@ -80,41 +150,111 @@ window.ssd decoration headerbar.titlebar button.titlebutton {
 """
 
 CSS_FLAT_BUTTONS = """
-/* Flat title bar buttons (like the menu button): no border box. */
-headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action) {
+/* Flat icon buttons in title bars (like the ⋮ menu): no border box. */
+headerbar button.image-button:not(.titlebutton):not(.suggested-action):not(.destructive-action),
+headerbar button.popup:not(.text-button):not(.suggested-action):not(.destructive-action) {
   border-color: transparent;
   background-color: transparent;
   background-image: none;
   box-shadow: none; }
-headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):hover {
+headerbar button.image-button:not(.titlebutton):not(.suggested-action):not(.destructive-action):hover,
+headerbar button.popup:not(.text-button):not(.suggested-action):not(.destructive-action):hover {
   border-color: transparent;
   background-color: rgba(255, 255, 255, 0.1); }
-headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):active,
-headerbar button:not(.titlebutton):not(.suggested-action):not(.destructive-action):checked {
+headerbar button.image-button:not(.titlebutton):not(.suggested-action):not(.destructive-action):active,
+headerbar button.image-button:not(.titlebutton):not(.suggested-action):not(.destructive-action):checked,
+headerbar button.popup:not(.text-button):not(.suggested-action):not(.destructive-action):active,
+headerbar button.popup:not(.text-button):not(.suggested-action):not(.destructive-action):checked {
   border-color: transparent;
   background-color: rgba(255, 255, 255, 0.2); }
 """
 
-CSS_GREEN_BUTTON = """
-/* Mint green for the main action button (e.g. "Take Screenshot"). */
+CSS_GREY_BUTTONS = """
+/* Plain buttons: lighter grey than the window so they stand out.
+   Flat, coloured and window buttons keep their own look. */
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton),
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):backdrop {
+  color: #FFFFFF;
+  border-color: #3C3C3C;
+  background-color: #333333;
+  background-image: none;
+  box-shadow: none; }
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):hover {
+  border-color: #5A5A5A;
+  background-color: #404040; }
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):active,
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):checked {
+  border-color: #5A5A5A;
+  background-color: #4D4D4D; }
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):disabled,
+button:not(.flat):not(.suggested-action):not(.destructive-action):not(.titlebutton):disabled:backdrop {
+  color: #8C8C8C;
+  border-color: #2A2A2A;
+  background-color: #262626; }
+"""
+
+CSS_DARK_CONTROLS = """
+/* Switches: grey instead of white when off. */
+switch, switch:backdrop {
+  border-color: #8C8C8C; }
+switch:hover {
+  border-color: #CECECE; }
+switch:checked, switch:checked:hover {
+  border-color: @ACCENT@; }
+switch slider, switch:backdrop slider {
+  background-color: #A0A0A0; }
+switch:hover slider {
+  background-color: #CECECE; }
+switch:checked slider {
+  background-color: #202020; }
+switch:checked:disabled, switch:checked:disabled:backdrop {
+  border-color: @ACCENT_DIM@;
+  background-color: @ACCENT_DIM@; }
+switch:disabled slider {
+  background-color: #3A3A3A; }
+
+/* Selection mode bar: accent colour instead of light grey. */
+headerbar.selection-mode, toolbar.selection-mode,
+headerbar.selection-mode:backdrop, toolbar.selection-mode:backdrop {
+  color: @ACCENT_TEXT@;
+  border-color: @ACCENT_BAR@;
+  background-color: @ACCENT_BAR@; }
+headerbar.selection-mode button:not(.flat):not(.suggested-action):not(.destructive-action),
+toolbar.selection-mode button:not(.flat):not(.suggested-action):not(.destructive-action) {
+  color: @ACCENT_TEXT@;
+  border-color: transparent;
+  background-color: rgba(0, 0, 0, 0.2);
+  background-image: none;
+  box-shadow: none; }
+headerbar.selection-mode button:not(.flat):not(.suggested-action):not(.destructive-action):hover,
+toolbar.selection-mode button:not(.flat):not(.suggested-action):not(.destructive-action):hover {
+  background-color: rgba(0, 0, 0, 0.35); }
+
+/* Window background when there's no compositor: dark, not white. */
+.solid-csd decoration {
+  background-color: #191919; }
+"""
+
+CSS_ACCENT_BUTTON = """
+/* Accent colour for the main action button (e.g. "Take Screenshot"). */
 button.suggested-action,
 headerbar button.suggested-action,
 button.suggested-action:backdrop,
 headerbar button.suggested-action:backdrop {
-  color: #FFFFFF;
-  background-color: #35A854;
+  color: @ACCENT_TEXT@;
+  background-color: @ACCENT@;
   background-image: none;
-  border-color: #35A854;
+  border-color: @ACCENT@;
   box-shadow: none; }
 button.suggested-action:hover,
 headerbar button.suggested-action:hover {
-  background-color: #42B862;
-  border-color: #42B862;
+  background-color: @ACCENT_HOVER@;
+  border-color: @ACCENT_HOVER@;
   box-shadow: none; }
 button.suggested-action:active,
 headerbar button.suggested-action:active {
-  background-color: #2D9147;
-  border-color: #2D9147; }
+  background-color: @ACCENT_ACTIVE@;
+  border-color: @ACCENT_ACTIVE@; }
 button.suggested-action:disabled,
 headerbar button.suggested-action:disabled {
   color: #8c8c8c;
@@ -132,15 +272,17 @@ CSS_NO_FOCUS = """
 # (key, label, description, default)
 OPTIONS = [
     ("titlebar", "Title bar buttons fill the corners",
-     "32px title bars; close/minimize/maximize reach the window edges", True),
-    ("green", "Mint green accent",
-     "Replace Windows blue with Mint green (selections, checkboxes, sliders)", True),
-    ("flat", "Flat title bar buttons",
-     "No border box around buttons like the ⋮ menu", True),
+     "32px title bars; sharp close/minimize/maximize that reach the window edges", True),
+    ("accent", "Accent colour instead of Windows blue",
+     "Selections, sliders, switches and progress bars use the colour from the Accent tab", True),
     ("checkbox", "Dark checkboxes, radio buttons and switches",
-     "No white boxes: dark background with Mint green tick/dot", True),
-    ("greenbutton", "Green main buttons",
-     "Main action buttons such as \"Take Screenshot\" in Mint green", True),
+     "No white boxes: dark background with an accent tick/dot", True),
+    ("greybuttons", "Grey buttons",
+     "Plain buttons get a lighter grey so they stand out from the window", True),
+    ("flat", "Flat title bar icon buttons",
+     "No border box around icon buttons like the ⋮ menu", True),
+    ("accentbutton", "Accent-coloured main buttons",
+     "Main action buttons such as \"Take Screenshot\"", True),
     ("nofocus", "Remove dashed focus outline",
      "Note: you won't see which item has keyboard focus", True),
     ("force", "Use this theme in every app",
@@ -149,7 +291,24 @@ OPTIONS = [
      "Updates title bars drawn by Cinnamon (windows stay open)", True),
 ]
 
-# ---------------------------------------------------------------- helpers
+
+def load_settings():
+    s = {"accent": DEFAULT_ACCENT, "options": {k: d for k, _, _, d in OPTIONS}}
+    try:
+        saved = json.load(open(SETTINGS))
+        s["accent"] = saved.get("accent", s["accent"])
+        s["options"].update({k: v for k, v in saved.get("options", {}).items()
+                             if k in s["options"]})
+    except (OSError, ValueError):
+        pass
+    return s
+
+
+def save_settings(accent, opts):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    json.dump({"accent": accent, "options": opts}, open(SETTINGS, "w"), indent=2)
+
+# ---------------------------------------------------------------- theme files
 
 
 def snapshot_path(theme):
@@ -180,7 +339,10 @@ def restore_original(theme, log):
     name = os.path.basename(theme.rstrip("/"))
     with tempfile.TemporaryDirectory(dir=parent) as tmp:
         with tarfile.open(snap) as t:
-            t.extractall(tmp, filter="data") if hasattr(tarfile, "data_filter") else t.extractall(tmp)
+            if hasattr(tarfile, "data_filter"):
+                t.extractall(tmp, filter="data")
+            else:
+                t.extractall(tmp)
         if os.path.exists(theme):
             shutil.rmtree(theme)
         shutil.move(os.path.join(tmp, name), theme)
@@ -195,7 +357,7 @@ def gtk3_css(theme):
     raise RuntimeError("No GTK3 stylesheet found in this theme.")
 
 
-GREEN_HUE = colorsys.rgb_to_hls(0x35 / 255, 0xA8 / 255, 0x54 / 255)[0]
+WIN_BLUE_L = colorsys.rgb_to_hls(0x00 / 255, 0x78 / 255, 0xD7 / 255)[1]
 
 
 def _is_blue(r, g, b):
@@ -203,31 +365,48 @@ def _is_blue(r, g, b):
     return s > 0.35 and 0.5 < h < 0.72 and l > 0.08
 
 
-def _to_green(r, g, b):
-    if (r, g, b) == (0x00, 0x78, 0xD7):  # Windows accent blue
-        return (0x35, 0xA8, 0x54)
-    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-    r2, g2, b2 = colorsys.hls_to_rgb(GREEN_HUE, min(1, l + 0.013), s * 0.52)
-    return tuple(round(v * 255) for v in (r2, g2, b2))
+def _recolor_fn(accent):
+    """Map Windows blues to matching shades of the accent colour."""
+    ar, ag, ab = (v / 255 for v in hex2rgb(accent))
+    ah, al, as_ = colorsys.rgb_to_hls(ar, ag, ab)
+    exact = hex2rgb(accent)
+
+    def to_accent(r, g, b):
+        if (r, g, b) == (0x00, 0x78, 0xD7):  # Windows accent blue
+            return exact
+        h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        l2 = max(0.04, min(0.96, l + (al - WIN_BLUE_L)))
+        return tuple(round(v * 255) for v in colorsys.hls_to_rgb(ah, l2, s * as_))
+    return to_accent
 
 
-def recolor_green(theme, log):
+def recolor_accent(theme, accent, log):
+    to_accent = _recolor_fn(accent)
+
     def hexsub(m):
         h = m.group(1)
         r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-        return "#%02X%02X%02X" % _to_green(r, g, b) if _is_blue(r, g, b) else m.group(0)
+        return rgb2hex(to_accent(r, g, b)) if _is_blue(r, g, b) else m.group(0)
 
     def rgbsub(m):
         r, g, b = map(int, m.groups()[1:4])
         if not _is_blue(r, g, b):
             return m.group(0)
-        return "%s(%d, %d, %d" % (m.group(1), *_to_green(r, g, b))
+        return "%s(%d, %d, %d" % (m.group(1), *to_accent(r, g, b))
+
+    def extras(css):
+        # Progress bars and full level bars use a fixed Windows green;
+        # switch them to the accent too (but keep the "success" colour).
+        css = re.sub(r"(?im)^(?!\s*@define-color).*#06B025.*$",
+                     lambda m: m.group(0).replace("#06B025", accent).replace("#06b025", accent),
+                     css)
+        return css.replace("#0d9726", shade(accent, -0.06))
 
     try:
         from PIL import Image
     except ImportError:
         Image = None
-        log("Pillow not installed: images (checkboxes etc.) stay blue.")
+        log("Pillow not installed: images stay blue.")
 
     n = 0
     for d in ("gtk-2.0", "gtk-3.0", "gtk-3.20", "gtk-4.0"):
@@ -236,6 +415,8 @@ def recolor_green(theme, log):
                 s = open(f, encoding="utf-8", errors="surrogateescape").read()
                 t = re.sub(r"#([0-9a-fA-F]{6})\b", hexsub, s)
                 t = re.sub(r"(rgba?)\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", rgbsub, t)
+                if f.endswith(".css"):
+                    t = extras(t)
                 if t != s:
                     open(f, "w", encoding="utf-8", errors="surrogateescape").write(t)
                     n += 1
@@ -247,12 +428,69 @@ def recolor_green(theme, log):
                     for x in range(im.width):
                         r, g, b, a = px[x, y]
                         if a and _is_blue(r, g, b):
-                            px[x, y] = (*_to_green(r, g, b), a)
+                            px[x, y] = (*to_accent(r, g, b), a)
                             changed = True
                 if changed:
                     im.save(f)
                     n += 1
-    log(f"Recoloured {n} files to Mint green.")
+    log(f"Recoloured {n} files to {accent_name(accent)}.")
+
+
+def dark_checkboxes(theme, accent, log):
+    """Redraw checkbox and radio images: dark fill, grey border, accent mark."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        log("Pillow not installed: checkboxes not changed.")
+        return
+    BG = (32, 32, 32)
+    BORDER, BORDER_HOVER, BORDER_OFF = (140, 140, 140), (206, 206, 206), (77, 77, 77)
+    MARK = hex2rgb(accent)
+    MARK_OFF = hex2rgb(mix(accent, "#202020", 0.55))
+    SS = 8  # draw large, then shrink for smooth edges
+
+    def draw(size, border, mark, mark_color, round_=False):
+        k = size / 13 * SS
+        im = Image.new("RGBA", (size * SS, size * SS), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        box = [0, 0, size * SS - 1, size * SS - 1]
+        w = max(1, round(size / 13)) * SS
+        if round_:
+            d.ellipse(box, fill=BG + (255,), outline=border + (255,), width=w)
+        else:
+            d.rectangle(box, fill=BG + (255,))
+            d.rectangle(box, outline=border + (255,), width=w)
+        if mark == "dot":
+            d.ellipse([3.5 * k, 3.5 * k, 9.5 * k, 9.5 * k], fill=mark_color + (255,))
+        elif mark == "tick":
+            d.line([(2.8 * k, 6.6 * k), (5.3 * k, 9.1 * k), (10.2 * k, 3.9 * k)],
+                   fill=mark_color + (255,), width=round(1.7 * k), joint="curve")
+        elif mark == "dash":
+            d.line([(3.5 * k, 6.5 * k), (9.5 * k, 6.5 * k)],
+                   fill=mark_color + (255,), width=round(2 * k))
+        return im.resize((size, size), Image.LANCZOS)
+
+    n = 0
+    for d in ("gtk-3.0", "gtk-3.20", "gtk-4.0"):
+        files = (glob.glob(os.path.join(theme, d, "**", "checkbox-*.png"), recursive=True)
+                 + glob.glob(os.path.join(theme, d, "**", "radio-*.png"), recursive=True))
+        for f in files:
+            name = os.path.basename(f)
+            size = Image.open(f).size[0]
+            radio = name.startswith("radio-")
+            if "-checked" in name:
+                mark = "dot" if radio else "tick"
+            else:
+                mark = "dash" if "-mixed" in name else None
+            if "insensitive" in name:
+                border, color = BORDER_OFF, MARK_OFF
+            elif "-over" in name or "-active" in name:
+                border, color = BORDER_HOVER, MARK
+            else:
+                border, color = BORDER, MARK
+            draw(size, border, mark, color, radio).save(f)
+            n += 1
+    log(f"Redrew {n} checkbox and radio images.")
 
 
 def set_force_theme(name, enabled, log):
@@ -291,98 +529,7 @@ def restart_cinnamon(log):
     log("Restarting Cinnamon…")
 
 
-CSS_DARK_CONTROLS = """
-/* Switches: grey instead of white when off. */
-switch, switch:backdrop {
-  border-color: #8C8C8C; }
-switch:hover {
-  border-color: #CECECE; }
-switch:checked, switch:checked:hover {
-  border-color: #35A854; }
-switch slider, switch:backdrop slider {
-  background-color: #A0A0A0; }
-switch:hover slider {
-  background-color: #CECECE; }
-switch:checked slider {
-  background-color: #202020; }
-
-/* Selection mode bar: Mint green instead of light grey. */
-headerbar.selection-mode, toolbar.selection-mode,
-headerbar.selection-mode:backdrop, toolbar.selection-mode:backdrop {
-  border-color: #2D9147;
-  background-color: #2D9147; }
-headerbar.selection-mode button, toolbar.selection-mode button {
-  color: #FFFFFF;
-  border-color: transparent;
-  background-color: rgba(0, 0, 0, 0.2);
-  background-image: none;
-  box-shadow: none; }
-headerbar.selection-mode button:hover, toolbar.selection-mode button:hover {
-  background-color: rgba(0, 0, 0, 0.35); }
-
-/* Window background when there's no compositor: dark, not white. */
-.solid-csd decoration {
-  background-color: #191919; }
-"""
-
-
-def dark_checkboxes(theme, log):
-    """Redraw checkbox and radio images: dark fill, grey border, green mark."""
-    try:
-        from PIL import Image, ImageDraw
-    except ImportError:
-        log("Pillow not installed: checkboxes not changed.")
-        return
-    BG, GREEN = (32, 32, 32), (53, 168, 84)
-    BORDER, BORDER_HOVER, BORDER_OFF = (140, 140, 140), (206, 206, 206), (77, 77, 77)
-    GREEN_OFF = (52, 92, 63)
-    SS = 8  # draw large, then shrink for smooth edges
-
-    def draw(size, border, mark, mark_color, round_=False):
-        k = size / 13 * SS
-        im = Image.new("RGBA", (size * SS, size * SS), (0, 0, 0, 0))
-        d = ImageDraw.Draw(im)
-        box = [0, 0, size * SS - 1, size * SS - 1]
-        w = max(1, round(size / 13)) * SS
-        if round_:
-            d.ellipse(box, fill=BG + (255,), outline=border + (255,), width=w)
-        else:
-            d.rectangle(box, fill=BG + (255,))
-            d.rectangle(box, outline=border + (255,), width=w)
-        if mark == "dot":
-            d.ellipse([3.5 * k, 3.5 * k, 9.5 * k, 9.5 * k], fill=mark_color + (255,))
-        elif mark == "tick":
-            d.line([(2.8 * k, 6.6 * k), (5.3 * k, 9.1 * k), (10.2 * k, 3.9 * k)],
-                   fill=mark_color + (255,), width=round(1.7 * k), joint="curve")
-        elif mark == "dash":
-            d.line([(3.5 * k, 6.5 * k), (9.5 * k, 6.5 * k)],
-                   fill=mark_color + (255,), width=round(2 * k))
-        return im.resize((size, size), Image.LANCZOS)
-
-    n = 0
-    for d in ("gtk-3.0", "gtk-3.20", "gtk-4.0"):
-        files = (glob.glob(os.path.join(theme, d, "**", "checkbox-*.png"), recursive=True)
-                 + glob.glob(os.path.join(theme, d, "**", "radio-*.png"), recursive=True))
-        for f in files:
-            name = os.path.basename(f)
-            size = Image.open(f).size[0]
-            radio = name.startswith("radio-")
-            if "-checked" in name:
-                mark = "dot" if radio else "tick"
-            else:
-                mark = "dash" if "-mixed" in name else None
-            if "insensitive" in name:
-                border, color = BORDER_OFF, GREEN_OFF
-            elif "-over" in name or "-active" in name:
-                border, color = BORDER_HOVER, GREEN
-            else:
-                border, color = BORDER, GREEN
-            draw(size, border, mark, color, radio).save(f)
-            n += 1
-    log(f"Redrew {n} checkbox and radio images.")
-
-
-def apply(theme, opts, log=print):
+def apply(theme, opts, accent=DEFAULT_ACCENT, log=print):
     theme = os.path.abspath(theme)
     name = os.path.basename(theme)
     if not os.path.isdir(theme):
@@ -390,27 +537,29 @@ def apply(theme, opts, log=print):
     ensure_original(theme, log)
     restore_original(theme, log)
 
-    if opts.get("green"):
-        recolor_green(theme, log)
+    if opts.get("accent"):
+        recolor_accent(theme, accent, log)
     if opts.get("checkbox"):
-        dark_checkboxes(theme, log)
+        dark_checkboxes(theme, accent, log)
     css = ""
+    if opts.get("greybuttons"):
+        css += CSS_GREY_BUTTONS
     if opts.get("titlebar"):
         css += CSS_TITLEBAR
     if opts.get("flat"):
         css += CSS_FLAT_BUTTONS
     if opts.get("checkbox"):
         css += CSS_DARK_CONTROLS
-    if opts.get("greenbutton"):
-        css += CSS_GREEN_BUTTON
+    if opts.get("accentbutton"):
+        css += CSS_ACCENT_BUTTON
     if opts.get("nofocus"):
         css += CSS_NO_FOCUS
     if css:
         with open(gtk3_css(theme), "a") as f:
-            f.write("\n/* ===== win10-theme-tweaks ===== */\n" + css)
+            f.write("\n/* ===== win10-theme-tweaks ===== */\n" + fill(css, accent))
         log("Added style tweaks.")
     open(os.path.join(theme, MARKER), "w").write(
-        " ".join(k for k, v in opts.items() if v) + "\n")
+        accent + " " + " ".join(k for k, v in opts.items() if v) + "\n")
 
     set_force_theme(name, bool(opts.get("force")), log)
     reload_gtk_theme(name)
@@ -426,22 +575,390 @@ def restore(theme, log=print):
     reload_gtk_theme(os.path.basename(theme))
     log("Original theme restored. Reopen apps to see it.")
 
+# ---------------------------------------------------------------- previews
+#
+# Each preview is a window with every common control, so you can see how
+# the theme looks in each kind of app Mint has.
+
+
+def has_typelib(name):
+    return bool(glob.glob(f"/usr/lib/*/girepository-1.0/{name}.typelib")
+                or glob.glob(f"/usr/lib/girepository-1.0/{name}.typelib"))
+
+
+PREVIEWS = [
+    ("gtk3", "Classic GTK3 apps", "Most Mint apps: Files, Settings, Xed", ["Gtk-3.0"]),
+    ("handy", "GTK3 + libhandy apps", "e.g. Screenshot, some GNOME apps", ["Gtk-3.0", "Handy-1"]),
+    ("gtk4", "GTK4 + libadwaita apps", "Newer GNOME apps, e.g. Text Editor",
+     ["Gtk-4.0", "Adw-1"]),
+]
+
+
+def preview_gtk3(handy=False):
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk
+    if handy:
+        gi.require_version("Handy", "1")
+        from gi.repository import Handy
+        Handy.init()
+
+    def heading(text):
+        l = Gtk.Label(xalign=0)
+        l.set_markup(f"<b>{text}</b>")
+        return l
+
+    def row(*ws, spacing=8):
+        b = Gtk.Box(spacing=spacing)
+        for w in ws:
+            b.pack_start(w, False, False, 0)
+        return b
+
+    def btn(label, cls=None, sensitive=True):
+        b = Gtk.Button(label=label)
+        b.set_sensitive(sensitive)
+        if cls:
+            b.get_style_context().add_class(cls)
+        return b
+
+    def section(title, *children):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.pack_start(heading(title), False, False, 0)
+        for c in children:
+            box.pack_start(c, False, False, 0)
+        return box
+
+    def check(label, active=False, inconsistent=False, sensitive=True):
+        c = Gtk.CheckButton(label=label)
+        c.set_active(active)
+        c.set_inconsistent(inconsistent)
+        c.set_sensitive(sensitive)
+        return c
+
+    def switch(active, sensitive=True):
+        s = Gtk.Switch()
+        s.set_active(active)
+        s.set_sensitive(sensitive)
+        s.set_valign(Gtk.Align.CENTER)
+        return s
+
+    # Buttons
+    toggle = Gtk.ToggleButton(label="Toggle (on)")
+    toggle.set_active(True)
+    linked = row(btn("Left"), btn("Middle"), btn("Right"), spacing=0)
+    linked.get_style_context().add_class("linked")
+    icon = Gtk.Button.new_from_icon_name("edit-copy-symbolic", Gtk.IconSize.BUTTON)
+    buttons = section(
+        "Buttons",
+        row(btn("Normal"), btn("Disabled", sensitive=False), btn("Flat", "flat")),
+        row(btn("Suggested", "suggested-action"), btn("Destructive", "destructive-action")),
+        row(toggle, linked, icon,
+            Gtk.LinkButton.new_with_label("https://linuxmint.com", "Link")))
+
+    # Checks, radios, switches
+    r1 = Gtk.RadioButton(label="Radio (on)")
+    r2 = Gtk.RadioButton.new_with_label_from_widget(r1, "Radio (off)")
+    r3 = Gtk.RadioButton.new_with_label_from_widget(r1, "Disabled")
+    r3.set_sensitive(False)
+    choices = section(
+        "Checkboxes, radio buttons and switches",
+        row(check("Checked", True), check("Unchecked"), check("Mixed", inconsistent=True)),
+        row(check("Disabled on", True, sensitive=False), check("Disabled off", sensitive=False)),
+        row(r1, r2, r3),
+        row(switch(True), Gtk.Label(label="On"), switch(False), Gtk.Label(label="Off"),
+            switch(True, False), Gtk.Label(label="Disabled")))
+
+    # Inputs
+    entry = Gtk.Entry(text="Text entry")
+    placeholder = Gtk.Entry(placeholder_text="Placeholder text")
+    disabled_entry = Gtk.Entry(text="Disabled")
+    disabled_entry.set_sensitive(False)
+    combo = Gtk.ComboBoxText()
+    for t in ("Dropdown", "Option 2", "Option 3"):
+        combo.append_text(t)
+    combo.set_active(0)
+    inputs = section(
+        "Text and choices",
+        row(entry, placeholder, disabled_entry),
+        row(Gtk.SpinButton.new_with_range(0, 100, 1), combo,
+            Gtk.FontButton(), Gtk.ColorButton()))
+
+    # Sliders and progress
+    scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+    scale.set_value(60)
+    scale.set_size_request(260, -1)
+    progress = Gtk.ProgressBar(fraction=0.6, show_text=True)
+    level = Gtk.LevelBar(value=0.6)
+    spinner = Gtk.Spinner()
+    spinner.start()
+    sliders = section("Sliders and progress", scale, progress, level, row(spinner))
+
+    # Lists and tabs
+    lb = Gtk.ListBox()
+    for t in ("Selected row", "Row", "Row"):
+        lb.add(Gtk.Label(label=t, xalign=0, margin=6))
+    lb.select_row(lb.get_row_at_index(0))
+    frame = Gtk.Frame()
+    frame.add(lb)
+    store = Gtk.ListStore(str, str)
+    for a, b in (("Name", "Value"), ("Second", "Row"), ("Third", "Row")):
+        store.append([a, b])
+    tree = Gtk.TreeView(model=store)
+    for i, t in enumerate(("Column", "Column 2")):
+        tree.append_column(Gtk.TreeViewColumn(t, Gtk.CellRendererText(), text=i))
+    tree.get_selection().select_path(Gtk.TreePath(0))
+    nb = Gtk.Notebook()
+    for t in ("Tab one", "Tab two", "Tab three"):
+        nb.append_page(Gtk.Label(label=f"{t} content", margin=12), Gtk.Label(label=t))
+    lists = section("Lists and tabs", frame, tree, nb)
+
+    # Messages and bars
+    info = Gtk.InfoBar(message_type=Gtk.MessageType.INFO, show_close_button=True)
+    info.get_content_area().add(Gtk.Label(label="An info bar message"))
+    exp = Gtk.Expander(label="Expander")
+    exp.add(Gtk.Label(label="Hidden content", xalign=0))
+    sel = Gtk.HeaderBar(title="Selection mode bar")
+    sel.get_style_context().add_class("selection-mode")
+    sel.pack_start(Gtk.Button(label="Cancel"))
+    bars = section("Messages and bars", info, exp, sel)
+
+    extra = []
+    if handy:
+        group = Handy.PreferencesGroup(title="libhandy rows")
+        r = Handy.ActionRow(title="Action row", subtitle="With a switch")
+        r.add(switch(True))
+        group.add(r)
+        r = Handy.ActionRow(title="Another row", subtitle="With a button")
+        b = btn("Button")
+        b.set_valign(Gtk.Align.CENTER)
+        r.add(b)
+        group.add(r)
+        er = Handy.ExpanderRow(title="Expander row", subtitle="Click to open")
+        er.add(Handy.ActionRow(title="Inside the expander"))
+        group.add(er)
+        extra.append(group)
+
+    # Layout: two columns
+    left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+    right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+    for w in (buttons, choices, inputs, sliders):
+        left.pack_start(w, False, False, 0)
+    for w in [lists, bars] + extra:
+        right.pack_start(w, False, False, 0)
+    cols = Gtk.Box(spacing=32, margin=20)
+    cols.pack_start(left, True, True, 0)
+    cols.pack_start(right, True, True, 0)
+    scroll = Gtk.ScrolledWindow()
+    scroll.add(cols)
+
+    title = "Theme preview: GTK3 + libhandy" if handy else "Theme preview: GTK3"
+    if handy:
+        win = Handy.Window(title=title)
+        hb = Handy.HeaderBar(title=title, show_close_button=True)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content.pack_start(hb, False, False, 0)
+        content.pack_start(scroll, True, True, 0)
+        win.add(content)
+    else:
+        win = Gtk.Window(title=title)
+        hb = Gtk.HeaderBar(title=title, show_close_button=True)
+        win.set_titlebar(hb)
+        win.add(scroll)
+    hb.pack_start(btn("Open"))
+    menu = Gtk.MenuButton()
+    menu.set_image(Gtk.Image.new_from_icon_name("open-menu-symbolic", Gtk.IconSize.BUTTON))
+    hb.pack_end(menu)
+    hb.pack_end(btn("Save", "suggested-action"))
+    win.set_default_size(1000, 760)
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
+
+
+def preview_gtk4():
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Gtk, Adw
+
+    def vbox(spacing=8):
+        return Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=spacing)
+
+    def row(*ws, spacing=8):
+        b = Gtk.Box(spacing=spacing)
+        for w in ws:
+            b.append(w)
+        return b
+
+    def btn(label, cls=None, sensitive=True):
+        b = Gtk.Button(label=label)
+        b.set_sensitive(sensitive)
+        if cls:
+            b.add_css_class(cls)
+        return b
+
+    def section(title, *children):
+        box = vbox()
+        h = Gtk.Label(xalign=0)
+        h.set_markup(f"<b>{title}</b>")
+        box.append(h)
+        for c in children:
+            box.append(c)
+        return box
+
+    def check(label, active=False, inconsistent=False, sensitive=True, group=None):
+        c = Gtk.CheckButton(label=label)
+        if group:
+            c.set_group(group)
+        c.set_active(active)
+        c.set_inconsistent(inconsistent)
+        c.set_sensitive(sensitive)
+        return c
+
+    def switch(active, sensitive=True):
+        s = Gtk.Switch(active=active, sensitive=sensitive)
+        s.set_valign(Gtk.Align.CENTER)
+        return s
+
+    def build(app):
+        toggle = Gtk.ToggleButton(label="Toggle (on)", active=True)
+        linked = row(btn("Left"), btn("Middle"), btn("Right"), spacing=0)
+        linked.add_css_class("linked")
+        buttons = section(
+            "Buttons",
+            row(btn("Normal"), btn("Disabled", sensitive=False), btn("Flat", "flat")),
+            row(btn("Suggested", "suggested-action"), btn("Destructive", "destructive-action"),
+                btn("Pill", "pill")),
+            row(toggle, linked, Gtk.Button(icon_name="edit-copy-symbolic"),
+                Gtk.LinkButton(uri="https://linuxmint.com", label="Link")))
+
+        r1 = check("Radio (on)", True)
+        r2 = check("Radio (off)", group=r1)
+        r3 = check("Disabled", group=r1, sensitive=False)
+        choices = section(
+            "Checkboxes, radio buttons and switches",
+            row(check("Checked", True), check("Unchecked"), check("Mixed", inconsistent=True)),
+            row(check("Disabled on", True, sensitive=False),
+                check("Disabled off", sensitive=False)),
+            row(r1, r2, r3),
+            row(switch(True), Gtk.Label(label="On"), switch(False), Gtk.Label(label="Off"),
+                switch(True, False), Gtk.Label(label="Disabled")))
+
+        inputs = section(
+            "Text and choices",
+            row(Gtk.Entry(text="Text entry"), Gtk.Entry(placeholder_text="Placeholder text"),
+                Gtk.Entry(text="Disabled", sensitive=False)),
+            row(Gtk.SpinButton.new_with_range(0, 100, 1),
+                Gtk.DropDown.new_from_strings(["Dropdown", "Option 2", "Option 3"])))
+
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        scale.set_value(60)
+        scale.set_size_request(260, -1)
+        sliders = section("Sliders and progress", scale,
+                          Gtk.ProgressBar(fraction=0.6, show_text=True),
+                          Gtk.LevelBar(value=0.6), row(Gtk.Spinner(spinning=True)))
+
+        lb = Gtk.ListBox()
+        lb.add_css_class("boxed-list")
+        r = Adw.ActionRow(title="Action row", subtitle="With a switch")
+        r.add_suffix(switch(True))
+        lb.append(r)
+        r = Adw.ActionRow(title="Another row", subtitle="With a button")
+        b = btn("Button")
+        b.set_valign(Gtk.Align.CENTER)
+        r.add_suffix(b)
+        lb.append(r)
+        er = Adw.ExpanderRow(title="Expander row", subtitle="Click to open")
+        er.add_row(Adw.ActionRow(title="Inside the expander"))
+        lb.append(er)
+
+        plain = Gtk.ListBox()
+        for t in ("Selected row", "Row", "Row"):
+            plain.append(Gtk.Label(label=t, xalign=0, margin_top=6, margin_bottom=6,
+                                   margin_start=6))
+        plain.select_row(plain.get_row_at_index(0))
+
+        nb = Gtk.Notebook()
+        for t in ("Tab one", "Tab two", "Tab three"):
+            nb.append_page(Gtk.Label(label=f"{t} content", margin_top=12, margin_bottom=12),
+                           Gtk.Label(label=t))
+        lists = section("Lists and tabs", lb, plain, nb)
+
+        sel = Gtk.HeaderBar()
+        sel.add_css_class("selection-mode")
+        sel.pack_start(Gtk.Button(label="Cancel"))
+        sel.set_title_widget(Gtk.Label(label="Selection mode bar"))
+        sel.set_show_title_buttons(False)
+        banner = Adw.Banner(title="A banner message", button_label="Action", revealed=True)
+        exp = Gtk.Expander(label="Expander", child=Gtk.Label(label="Hidden content", xalign=0))
+        bars = section("Messages and bars", banner, exp, sel)
+
+        left, right = vbox(20), vbox(20)
+        for w in (buttons, choices, inputs, sliders):
+            left.append(w)
+        for w in (lists, bars):
+            right.append(w)
+        cols = Gtk.Box(spacing=32, margin_top=20, margin_bottom=20,
+                       margin_start=20, margin_end=20, homogeneous=True)
+        cols.append(left)
+        cols.append(right)
+        scroll = Gtk.ScrolledWindow(child=cols, vexpand=True)
+
+        title = "Theme preview: GTK4 + libadwaita"
+        hb = Adw.HeaderBar(title_widget=Gtk.Label(label=title))
+        hb.pack_start(btn("Open"))
+        hb.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic"))
+        hb.pack_end(btn("Save", "suggested-action"))
+        content = vbox(0)
+        content.append(hb)
+        content.append(scroll)
+        win = Adw.ApplicationWindow(application=app, title=title, content=content)
+        win.set_default_size(1000, 760)
+        win.present()
+
+    app = Adw.Application(application_id="org.win10tweaks.Preview4")
+    app.connect("activate", build)
+    app.run([])
+
+
+def launch_preview(kind, theme_name):
+    env = dict(os.environ, GTK_THEME=theme_name)
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--preview", kind],
+                     env=env, start_new_session=True)
+
 # ---------------------------------------------------------------- window
 
 
 def run_gui():
     import gi
     gi.require_version("Gtk", "3.0")
-    from gi.repository import Gtk, GLib
+    from gi.repository import Gtk, Gdk, GLib
+
+    GLib.set_prgname("win10-theme-tweaks")
+    GLib.set_application_name("Windows 10 Theme Tweaks")
+    settings = load_settings()
+    state = {"accent": settings["accent"]}
 
     win = Gtk.Window(title="Windows 10 Theme Tweaks")
-    win.set_default_size(460, -1)
-    win.set_border_width(16)
+    win.set_default_size(520, 640)
     win.connect("destroy", Gtk.main_quit)
 
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-    win.add(box)
+    stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
+    switcher = Gtk.StackSwitcher(stack=stack)
+    hb = Gtk.HeaderBar(show_close_button=True)
+    hb.set_custom_title(switcher)
+    win.set_titlebar(hb)
 
+    outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    outer.pack_start(stack, True, True, 0)
+    win.add(outer)
+
+    def page():
+        b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=16)
+        return b
+
+    # ---- Tweaks page
+    tweaks = page()
     row = Gtk.Box(spacing=8)
     row.pack_start(Gtk.Label(label="Theme folder", xalign=0), False, False, 0)
     chooser = Gtk.FileChooserButton(title="Choose theme folder",
@@ -451,7 +968,7 @@ def run_gui():
     else:
         chooser.set_current_folder(os.path.join(HOME, ".themes"))
     row.pack_start(chooser, True, True, 0)
-    box.pack_start(row, False, False, 0)
+    tweaks.pack_start(row, False, False, 0)
 
     checks = {}
     for key, label, desc, default in OPTIONS:
@@ -461,22 +978,134 @@ def run_gui():
                        f"<small>{GLib.markup_escape_text(desc)}</small>")
         lbl.set_line_wrap(True)
         cb.add(lbl)
-        cb.set_active(default)
+        cb.set_active(settings["options"].get(key, default))
         checks[key] = cb
-        box.pack_start(cb, False, False, 0)
+        tweaks.pack_start(cb, False, False, 0)
+    scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+    scroll.add(tweaks)
+    stack.add_titled(scroll, "tweaks", "Tweaks")
 
-    status = Gtk.Label(xalign=0)
-    status.set_line_wrap(True)
-    status.set_selectable(True)
-    box.pack_start(status, False, False, 4)
+    # ---- Accent page
+    accent_page = page()
+    intro = Gtk.Label(xalign=0, wrap=True,
+                      label="Choose the colour that replaces Windows blue. "
+                            "It's used for selections, switches, sliders, "
+                            "checkbox ticks and main buttons.")
+    accent_page.pack_start(intro, False, False, 0)
 
-    buttons = Gtk.Box(spacing=8)
+    css = Gtk.CssProvider()
+    rules = [".swatch { border-radius: 50%; min-width: 40px; min-height: 40px; "
+             "border: 2px solid transparent; }",
+             "radiobutton.swatch-btn:checked .swatch, button.swatch-btn:checked .swatch "
+             "{ border-color: #FFFFFF; }",
+             ".swatch-btn { padding: 6px; }"]
+    for i, (_, c) in enumerate(ACCENTS):
+        rules.append(f".swatch-{i} {{ background-color: {c}; }}")
+    css.load_from_data("\n".join(rules).encode())
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css,
+                                             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
+                       min_children_per_line=5, column_spacing=8, row_spacing=8)
+    chosen = Gtk.Label(xalign=0)
+    custom_btn = Gtk.ColorButton()
+    radios = []
+    group = None
+
+    def show_chosen():
+        a = state["accent"]
+        chosen.set_markup(f"Selected: <b>{GLib.markup_escape_text(accent_name(a))}</b> "
+                          f"<span foreground='{a}'>●</span> {a.upper()}")
+
+    def pick(color):
+        state["accent"] = color.upper()
+        show_chosen()
+
+    for i, (name, color) in enumerate(ACCENTS):
+        rb = Gtk.RadioButton.new_from_widget(group)
+        group = group or rb
+        rb.set_mode(False)  # look like a button, not a radio circle
+        rb.get_style_context().add_class("swatch-btn")
+        rb.get_style_context().add_class("flat")
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        dot = Gtk.Box()
+        dot.get_style_context().add_class("swatch")
+        dot.get_style_context().add_class(f"swatch-{i}")
+        dot.set_halign(Gtk.Align.CENTER)
+        inner.pack_start(dot, False, False, 0)
+        inner.pack_start(Gtk.Label(label=name), False, False, 0)
+        rb.add(inner)
+        rb.connect("toggled", lambda b, c=color: b.get_active() and pick(c))
+        radios.append((rb, color))
+        flow.add(rb)
+    custom_radio = Gtk.RadioButton.new_from_widget(group)
+    custom_radio.set_no_show_all(True)  # hidden: selected when a custom colour is used
+    accent_page.pack_start(flow, False, False, 0)
+
+    crow = Gtk.Box(spacing=8)
+    crow.pack_start(Gtk.Label(label="Custom colour"), False, False, 0)
+    crow.pack_start(custom_btn, False, False, 0)
+    accent_page.pack_start(crow, False, False, 0)
+    accent_page.pack_start(chosen, False, False, 8)
+
+    def on_custom(b):
+        rgba = b.get_rgba()
+        custom_radio.set_active(True)
+        pick(rgb2hex((rgba.red * 255, rgba.green * 255, rgba.blue * 255)))
+    custom_btn.connect("color-set", on_custom)
+
+    match = next((rb for rb, c in radios if c.upper() == state["accent"].upper()), None)
+    if match:
+        match.set_active(True)
+    else:
+        custom_radio.set_active(True)
+    rgba = Gdk.RGBA()
+    rgba.parse(state["accent"])
+    custom_btn.set_rgba(rgba)
+    show_chosen()
+    note = Gtk.Label(xalign=0, wrap=True)
+    note.set_markup("<small>Press Apply on the Tweaks tab (or below) to use the new colour.</small>")
+    accent_page.pack_start(note, False, False, 0)
+    stack.add_titled(accent_page, "accent", "Accent")
+
+    # ---- Preview page
+    prev = page()
+    prev.pack_start(Gtk.Label(
+        xalign=0, wrap=True,
+        label="Open a window with every kind of button and control, drawn with "
+              "the theme in the folder chosen on the Tweaks tab. Mint has three "
+              "kinds of apps, each styled a little differently:"), False, False, 0)
+    for kind, title, desc, libs in PREVIEWS:
+        r = Gtk.Box(spacing=12)
+        txt = Gtk.Label(xalign=0, wrap=True)
+        txt.set_markup(f"{GLib.markup_escape_text(title)}\n<small>{GLib.markup_escape_text(desc)}</small>")
+        r.pack_start(txt, True, True, 0)
+        missing = [l for l in libs if not has_typelib(l)]
+        b = Gtk.Button(label="Open preview")
+        b.set_valign(Gtk.Align.CENTER)
+        if missing:
+            b.set_sensitive(False)
+            pk = {"Gtk-4.0": "gir1.2-gtk-4.0", "Adw-1": "gir1.2-adw-1",
+                  "Handy-1": "gir1.2-handy-1", "Gtk-3.0": "gir1.2-gtk-3.0"}
+            txt.set_markup(txt.get_label() + "\n<small>Needs: <tt>sudo apt install "
+                           + " ".join(pk[m] for m in missing) + "</tt></small>")
+            txt.set_selectable(True)
+        b.connect("clicked", lambda _b, k=kind: launch_preview(
+            k, os.path.basename((chooser.get_filename() or DEFAULT_THEME).rstrip("/"))))
+        r.pack_start(b, False, False, 0)
+        prev.pack_start(r, False, False, 6)
+    stack.add_titled(prev, "preview", "Preview")
+
+    # ---- Status and buttons (shared by all pages)
+    status = Gtk.Label(xalign=0, wrap=True, selectable=True, margin_start=16, margin_end=16)
+    outer.pack_start(status, False, False, 4)
+    buttons = Gtk.Box(spacing=8, margin=16)
     restore_btn = Gtk.Button(label="Restore original")
     apply_btn = Gtk.Button(label="Apply")
     apply_btn.get_style_context().add_class("suggested-action")
     buttons.pack_end(apply_btn, False, False, 0)
     buttons.pack_end(restore_btn, False, False, 0)
-    box.pack_end(buttons, False, False, 0)
+    outer.pack_start(buttons, False, False, 0)
 
     messages = []
 
@@ -501,8 +1130,12 @@ def run_gui():
         apply_btn.set_sensitive(True)
         restore_btn.set_sensitive(True)
 
-    apply_btn.connect("clicked", lambda *_: run(
-        lambda t: apply(t, {k: c.get_active() for k, c in checks.items()}, log)))
+    def do_apply(theme):
+        opts = {k: c.get_active() for k, c in checks.items()}
+        save_settings(state["accent"], opts)
+        apply(theme, opts, state["accent"], log)
+
+    apply_btn.connect("clicked", lambda *_: run(do_apply))
     restore_btn.connect("clicked", lambda *_: run(lambda t: restore(t, log)))
 
     win.show_all()
@@ -511,9 +1144,26 @@ def run_gui():
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    theme = next((a for a in args if not a.startswith("--")), DEFAULT_THEME)
+    if "--preview" in args:
+        kind = args[args.index("--preview") + 1] if len(args) > args.index("--preview") + 1 else "gtk3"
+        if kind == "gtk4":
+            preview_gtk4()
+        else:
+            preview_gtk3(handy=(kind == "handy"))
+        sys.exit(0)
+    theme = next((a for a in args if not a.startswith("--") and os.path.isdir(a)), DEFAULT_THEME)
     if "--apply" in args:
-        apply(theme, {k: d for k, _, _, d in OPTIONS if not (k == "restart" and "--no-restart" in args)})
+        s = load_settings()
+        accent = s["accent"]
+        if "--accent" in args:
+            v = args[args.index("--accent") + 1]
+            accent = dict((n.lower(), c) for n, c in ACCENTS).get(v.lower(), v)
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
+                sys.exit(f"Unknown accent: {v}")
+        opts = dict(s["options"])
+        if "--no-restart" in args:
+            opts["restart"] = False
+        apply(theme, opts, accent)
     elif "--restore" in args:
         restore(theme)
     else:
