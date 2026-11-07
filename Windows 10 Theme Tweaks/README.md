@@ -14,7 +14,9 @@ Each item is a checkbox:
 - **Grey buttons**: plain buttons get a lighter grey so they stand out from the window.
 - **Flat title bar icon buttons**: no border box around icon buttons like the ⋮ menu in title bars.
 - **Accent-coloured main buttons**: main action buttons like "Take Screenshot".
-- **Remove dashed focus outline**: no dotted border after clicking a button. You won't see which item has keyboard focus.
+- **Solid focus outline**: a solid white outline instead of the dashed one, so you can see which button you're on when using Tab or the arrow keys. GTK only shows it after you use the keyboard.
+
+The disk usage bars in the Nemo sidebar (under *Computer* / file system) are always made Windows green.
 - **Use this theme in every app**: sets `GTK_THEME` in `~/.profile` and `~/.config/environment.d/` so apps that switch to the GNOME look in dark mode (like the screenshot app) still use this theme. Takes effect after logging out and back in.
 - **Restart Cinnamon after applying**: needed for title bars drawn by Cinnamon (e.g. Terminal, kitty) to update. Open windows stay open.
 

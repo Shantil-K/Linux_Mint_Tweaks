@@ -9,7 +9,8 @@ Cinnamon, always starting from an untouched copy of the theme:
     Windows blue
   - Dark checkboxes, radio buttons and switches
   - Grey plain buttons, flat title bar icon buttons, accent main buttons
-  - No dashed focus outline
+  - Solid focus outline instead of the dashed one
+  - Green disk usage bar in the Nemo sidebar
   - Force the theme on every app (even ones that switch in dark mode)
 
 The first time it sees a theme folder without its marker file, it saves a
@@ -263,10 +264,22 @@ headerbar button.suggested-action:disabled {
 """
 
 CSS_NO_FOCUS = """
-/* No dashed focus outline. */
+/* Solid focus outline instead of the dashed one, like Windows 10.
+   GTK only draws it after you use the keyboard (Tab or arrow keys). */
 * {
-  outline-style: none;
-  outline-width: 0; }
+  outline-style: solid;
+  outline-width: 2px;
+  outline-color: #FFFFFF; }
+"""
+
+CSS_NEMO_DISK = """
+/* Nemo sidebar disk usage bar: green, like Windows. */
+.nemo-window .places-treeview {
+  -NemoPlacesTreeView-disk-full-fg-color: #06B025;
+  -NemoPlacesTreeView-disk-full-bg-color: #3A3A3A; }
+.nemo-window .places-treeview:selected {
+  -NemoPlacesTreeView-disk-full-fg-color: #06B025;
+  -NemoPlacesTreeView-disk-full-bg-color: #202020; }
 """
 
 # (key, label, description, default)
@@ -283,8 +296,8 @@ OPTIONS = [
      "No border box around icon buttons like the ⋮ menu", True),
     ("accentbutton", "Accent-coloured main buttons",
      "Main action buttons such as \"Take Screenshot\"", True),
-    ("nofocus", "Remove dashed focus outline",
-     "Note: you won't see which item has keyboard focus", True),
+    ("nofocus", "Solid focus outline",
+     "A white outline instead of the dashed one shows the button you're on with the keyboard", True),
     ("force", "Use this theme in every app",
      "Stops apps switching to the GNOME look in dark mode (needs log out)", True),
     ("restart", "Restart Cinnamon after applying",
@@ -541,7 +554,7 @@ def apply(theme, opts, accent=DEFAULT_ACCENT, log=print):
         recolor_accent(theme, accent, log)
     if opts.get("checkbox"):
         dark_checkboxes(theme, accent, log)
-    css = ""
+    css = CSS_NEMO_DISK
     if opts.get("greybuttons"):
         css += CSS_GREY_BUTTONS
     if opts.get("titlebar"):
