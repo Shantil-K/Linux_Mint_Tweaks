@@ -6,6 +6,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 
 - [Fix NTFS Partition Nemo Action](#fix-ntfs-partition-nemo-action)
 - [Papirus Folder Color](#papirus-folder-color)
+- [Nemo Empty Folder Icon](Nemo%20Empty%20Folder%20Icon/)
 - [H.264 Video Playback Codecs](#h264-video-playback-codecs)
 - [Package Dependencies Report](#package-dependencies-report)
 - [Firefox Touchpad Zoom & Smooth Scrolling (X11)](#firefox-touchpad-zoom--smooth-scrolling-x11)
