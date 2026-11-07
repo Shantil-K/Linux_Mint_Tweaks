@@ -105,13 +105,19 @@ cd "Windows 10 Theme Tweaks" && ./install.sh
 
 # Firefox Touchpad Zoom & Smooth Scrolling (X11)
 
-Enables pinch-to-zoom gestures, smooth kinetic scrolling, and touchscreen gestures in Firefox, Waterfox, and other Gecko browsers on X11 by setting `MOZ_USE_XINPUT2=1` systemwide.
+Enables pinch-to-zoom gestures, smooth kinetic scrolling, and touchscreen gestures in Firefox, Waterfox, and other Gecko browsers on X11. Needs two things: `MOZ_USE_XINPUT2=1` set systemwide, and the **libinput** touchpad driver (the older synaptics driver can't send pinch gestures to apps).
 
-See [Firefox Zoom (X11)](Firefox%20Zoom%20(X11)/) for the helper script and verification instructions.
+See [Firefox Zoom (X11)](Firefox%20Zoom%20(X11)/) for the helper script, driver check and verification instructions.
 
-### Quick Command (Systemwide)
+### Quick Commands (Systemwide)
 ```bash
+# 1. Environment variable
 grep -qxF 'MOZ_USE_XINPUT2=1' /etc/environment || echo 'MOZ_USE_XINPUT2=1' | sudo tee -a /etc/environment
+
+# 2. libinput driver for touchpads (instead of synaptics)
+sudo apt install xserver-xorg-input-libinput
+sudo mkdir -p /etc/X11/xorg.conf.d
+printf 'Section "InputClass"\n    Identifier "touchpad libinput override"\n    MatchIsTouchpad "on"\n    MatchDevicePath "/dev/input/event*"\n    Driver "libinput"\n    Option "Tapping" "on"\nEndSection\n' | sudo tee /etc/X11/xorg.conf.d/90-touchpad-libinput.conf
 ```
 *(Log out and log back in for changes to take effect across all application menus and launchers).*
 
