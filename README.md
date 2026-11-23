@@ -14,6 +14,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Text Extractor](Text%20Extractor/)
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
 - [Windows 10 Theme Tweaks](#windows-10-theme-tweaks)
+- [Fingerprint Reader (Goodix 53xc)](#fingerprint-reader-goodix-53xc)
 
 ---
 
@@ -122,4 +123,16 @@ printf 'Section "InputClass"\n    Identifier "touchpad libinput override"\n    M
 ```
 *(Log out and log back in for changes to take effect across all application menus and launchers).*
 
+---
 
+# Fingerprint Reader (Goodix 53xc)
+
+Makes the Goodix fingerprint reader found in Dell laptops (e.g. the G3 3590, sensor `27c6:530c`) work for login, the lock screen and `sudo`, using Dell's proprietary `libfprint-2-tod1-goodix` driver. Also covers dual booting with Windows.
+
+See [Fingerprint (Goodix 53xc)](Fingerprint%20(Goodix%2053xc)/) for details.
+
+### Quick Start
+```bash
+cd "Fingerprint (Goodix 53xc)" && ./install.sh
+fprintd-enroll -f right-index-finger
+```
