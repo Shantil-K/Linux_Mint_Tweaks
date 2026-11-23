@@ -15,6 +15,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Windows Alternative Programs](Windows%20Alternative%20Programs/)
 - [Windows 10 Theme Tweaks](#windows-10-theme-tweaks)
 - [Fingerprint Reader (Goodix 53xc)](#fingerprint-reader-goodix-53xc)
+- [GRUB "Linux Mint" Entry That Follows Kernel Updates](#grub-linux-mint-entry-that-follows-kernel-updates)
 
 ---
 
@@ -135,4 +136,18 @@ See [Fingerprint (Goodix 53xc)](Fingerprint%20(Goodix%2053xc)/) for details.
 ```bash
 cd "Fingerprint (Goodix 53xc)" && ./install.sh
 fprintd-enroll -f right-index-finger
+```
+
+---
+
+# GRUB "Linux Mint" Entry That Follows Kernel Updates
+
+If you renamed the "Ubuntu" boot entry to "Linux Mint" with Grub Customizer, the copied entry has the kernel version hard-coded, so kernel updates install but never get booted. This points the entry at the `/boot/vmlinuz` and `/boot/initrd.img` symlinks so it always boots the newest kernel and keeps the name.
+
+See [GRUB Linux Mint Entry](GRUB%20Linux%20Mint%20Entry/) for how to check, the fix, and how to undo it.
+
+### Quick Start
+```bash
+uname -r; readlink /boot/vmlinuz           # different versions = pinned
+cd "GRUB Linux Mint Entry" && ./fix_custom_entry_kernel.sh
 ```
