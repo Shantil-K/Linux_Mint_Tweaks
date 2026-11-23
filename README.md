@@ -16,6 +16,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Windows 10 Theme Tweaks](#windows-10-theme-tweaks)
 - [Fingerprint Reader (Goodix 53xc)](#fingerprint-reader-goodix-53xc)
 - [GRUB "Linux Mint" Entry That Follows Kernel Updates](#grub-linux-mint-entry-that-follows-kernel-updates)
+- [G-Mode Fan Boost (Dell G3)](#g-mode-fan-boost-dell-g3)
 
 ---
 
@@ -150,4 +151,18 @@ See [GRUB Linux Mint Entry](GRUB%20Linux%20Mint%20Entry/) for how to check, the 
 ```bash
 uname -r; readlink /boot/vmlinuz           # different versions = pinned
 cd "GRUB Linux Mint Entry" && ./fix_custom_entry_kernel.sh
+```
+
+---
+
+# G-Mode Fan Boost (Dell G3)
+
+Makes the G key and a Cinnamon panel applet control the fans on a Dell G-series laptop, like Game Shift on Windows. Fan speed = Dell's automatic curve + a boost from 0 to 100. The G key cycles through your levels (default Automatic, +33, +66, +100), and the applet shows fan speeds and temperatures with a level menu, a slider, and scroll-to-adjust. Needs kernel 6.15 or newer (`alienware_wmi` fan boost).
+
+See [G-Mode Fan Boost](G-Mode%20Fan%20Boost/) for how it works, measured fan speeds, and settings.
+
+### Quick Start
+```bash
+cd "G-Mode Fan Boost" && ./install.sh
+g-fan-boost status
 ```

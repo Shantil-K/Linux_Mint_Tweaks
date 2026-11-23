@@ -1,0 +1,53 @@
+#!/bin/sh
+# Dell G3 3590 "G-Mode": fan boost through the alienware-wmi driver (kernel 6.15+).
+#
+# The firmware's boost is added on top of Dell's automatic fan curve:
+#     fan speed = automatic curve (follows temperature) + boost
+# Boost 0 = automatic only. This firmware accepts boost 0-100 (100 = ~5800 RPM, fan max).
+#
+# Usage:
+#   g-fan-boost get              current boost (0-100)
+#   g-fan-boost status           boost and both fan speeds
+#   g-fan-boost set <value>      set boost; out-of-range values are clamped to 0-100,
+#                                "50%", " 66 " and decimals (rounded) are accepted
+#   g-fan-boost add <+/-value>   change boost relative to now, clamped to 0-100
+#   g-fan-boost on | off | toggle
+set -eu
+MAX=100
+H=""
+for n in /sys/class/hwmon/hwmon*/name; do
+    [ "$(cat "$n")" = alienware_wmi ] && H=$(dirname "$n")
+done
+[ -n "$H" ] || { echo "alienware_wmi fan control not found" >&2; exit 1; }
+cur=$(cat "$H/fan1_boost")
+
+# norm <value> <base>: prints base+value (or value when base is empty) clamped to 0..MAX.
+# Fails only when the value contains no number at all.
+norm() {
+    awk -v s="$1" -v base="$2" -v max="$MAX" 'BEGIN {
+        gsub(/[[:space:]%]/, "", s); sub(/,/, ".", s)
+        sign = 1
+        if (s ~ /^\+/) s = substr(s, 2)
+        else if (s ~ /^-/) { sign = -1; s = substr(s, 2) }
+        if (s !~ /^([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][-+]?[0-9]+)?$/) exit 1
+        n = sign * int(s + 0.5)
+        if (base != "") n = base + n
+        if (n < 0) n = 0
+        if (n > max) n = max
+        print n
+    }'
+}
+
+case "${1:-toggle}" in
+    get)    echo "$cur"; exit 0 ;;
+    status) echo "boost=$cur rpm=$(cat "$H/fan1_input")/$(cat "$H/fan2_input")"; exit 0 ;;
+    on)     new=$MAX ;;
+    off)    new=0 ;;
+    toggle) if [ "$cur" -gt 0 ]; then new=0; else new=$MAX; fi ;;
+    set)    new=$(norm "${2:-}" "") || { echo "set needs a number, e.g. set 50" >&2; exit 2; } ;;
+    add)    new=$(norm "${2:-}" "$cur") || { echo "add needs a number, e.g. add +10" >&2; exit 2; } ;;
+    *)      echo "usage: g-fan-boost get | status | set <value> | add <+/-value> | on | off | toggle" >&2; exit 2 ;;
+esac
+echo "$new" > "$H/fan1_boost"
+echo "$new" > "$H/fan2_boost"
+echo "$new"

@@ -1,0 +1,31 @@
+{
+    "head": { "type": "header", "description": "Panel" },
+    "label-style": {
+        "type": "combobox",
+        "default": "level",
+        "description": "Panel label",
+        "options": {
+            "Level (Auto, +66)": "level",
+            "Level and CPU fan speed": "level-rpm",
+            "Icon only": "none"
+        }
+    },
+    "scroll-step": {
+        "type": "spinbutton",
+        "default": 5,
+        "min": 1,
+        "max": 50,
+        "step": 1,
+        "units": "per scroll",
+        "description": "Boost change when scrolling on the icon"
+    },
+    "interval": {
+        "type": "spinbutton",
+        "default": 2,
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "units": "seconds",
+        "description": "Refresh fan speeds every"
+    }
+}

@@ -1,0 +1,7 @@
+{
+    "uuid": "g-mode@shantil",
+    "name": "G-Mode Fan Boost",
+    "description": "Fan boost for Dell G-series laptops (alienware-wmi). Fan speed = automatic curve + boost. Shows fan speeds and temperatures; pick a level, drag a slider or scroll.",
+    "version": "1.0",
+    "max-instances": 1
+}
