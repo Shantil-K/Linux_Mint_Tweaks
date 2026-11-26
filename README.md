@@ -18,6 +18,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [GRUB "Linux Mint" Entry That Follows Kernel Updates](#grub-linux-mint-entry-that-follows-kernel-updates)
 - [G-Mode Fan Boost (Dell G3)](#g-mode-fan-boost-dell-g3)
 - [Battery Charge Limit](#battery-charge-limit)
+- [Linux Mint Shortcuts](#linux-mint-shortcuts)
 
 ---
 
@@ -181,3 +182,11 @@ See [Battery Charge Limit](Battery%20Charge%20Limit/) for the script, manual com
 ./"Battery Charge Limit"/battery_charge_mode.sh custom      # 50–90%
 ./"Battery Charge Limit"/battery_charge_mode.sh standard    # charge to 100%
 ```
+
+---
+
+# Linux Mint Shortcuts
+
+Keyboard shortcut helpers for Cinnamon. `super_switch.sh` makes one shortcut do two things: in a fullscreen window it sends `Super+S` (to show the panel/desklets), otherwise it sends `Shift+Super+Home` (to open the menu). Needs `xdotool` and X11.
+
+See [Linux Mint Shortcuts](Linux%20Mint%20Shortcuts/) for setup.

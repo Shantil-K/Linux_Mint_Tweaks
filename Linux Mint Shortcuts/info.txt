@@ -1,0 +1,1 @@
+Show displaybar in linux mint when in fullscreen
