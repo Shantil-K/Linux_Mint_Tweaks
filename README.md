@@ -17,6 +17,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [Fingerprint Reader (Goodix 53xc)](#fingerprint-reader-goodix-53xc)
 - [GRUB "Linux Mint" Entry That Follows Kernel Updates](#grub-linux-mint-entry-that-follows-kernel-updates)
 - [G-Mode Fan Boost (Dell G3)](#g-mode-fan-boost-dell-g3)
+- [Battery Charge Limit](#battery-charge-limit)
 
 ---
 
@@ -165,4 +166,18 @@ See [G-Mode Fan Boost](G-Mode%20Fan%20Boost/) for how it works, measured fan spe
 ```bash
 cd "G-Mode Fan Boost" && ./install.sh
 g-fan-boost status
+```
+
+---
+
+# Battery Charge Limit
+
+Keeps a plugged-in laptop battery from sitting at 96–100% all the time, which wears it out faster. In **Custom** mode it only charges below 50% and stops at 90%. Switch to **Standard** when you need a full charge.
+
+See [Battery Charge Limit](Battery%20Charge%20Limit/) for the script, manual commands and how to make it stick in the BIOS.
+
+### Quick Start
+```bash
+./"Battery Charge Limit"/battery_charge_mode.sh custom      # 50–90%
+./"Battery Charge Limit"/battery_charge_mode.sh standard    # charge to 100%
 ```
