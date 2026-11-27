@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Fix NTFS Partition
+Comment=Run ntfsfix on an NTFS drives
+Exec=@HOME@/.local/bin/fix_ntfs_gui.sh
+Icon=@HOME@/.local/share/icons/Windows.png
+Selection=none
+Extensions=dir;

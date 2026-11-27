@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Hide File (New)
+Comment=Add selected file(s) to the .hidden file
+Exec=@HOME@/.local/bin/hide_file.sh %P
+Icon=visibility-off
+Selection=M
+Extensions=all;

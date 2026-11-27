@@ -1,0 +1,91 @@
+{
+  "extensions": {
+    "ajkhmmldknmfjnmeedkbkkojgobmljda": "CRX Extractor/Downloader",
+    "ekhagklcjbdpajgpjgmbionohlpdbjgc": "Zotero Connector",
+    "fdhkbilacfkbfgghadoeefcblipnlhgd": "eGCA -ATC Logbook Autofill",
+    "illbbfoihflomkbpcaaakhijinbnejom": "90kids Games",
+    "mnjggcdmjocbbbhaepdhchncahnbgone": "SponsorBlock",
+    "oboonakemofpalcgghocfoadofidjkkk": "KeePassXC-Browser",
+    "omkfmpieigblcllmkgbflkikinpkodlk": "enhanced-h264ify"
+  },
+  "settings": {
+    "bookmark_bar.show_on_all_tabs": false,
+    "bookmark_bar.show_tab_groups": false,
+    "browser.enable_spellchecking": false,
+    "browser.pin_split_tab_button": true,
+    "browser.show_home_button": true,
+    "browser.theme": {
+      "color_scheme2": 2
+    },
+    "custom_links": {
+      "initialized": true,
+      "list": [
+        {
+          "isMostVisited": false,
+          "title": "YouTube",
+          "url": "https://youtube.com/"
+        }
+      ]
+    },
+    "extensions.commands": {
+      "linux:Alt+Shift+G": {
+        "command_name": "show_password_generator",
+        "extension": "oboonakemofpalcgghocfoadofidjkkk",
+        "global": false
+      },
+      "linux:Alt+Shift+O": {
+        "command_name": "fill_totp",
+        "extension": "oboonakemofpalcgghocfoadofidjkkk",
+        "global": false
+      },
+      "linux:Alt+Shift+U": {
+        "command_name": "fill_username_password",
+        "extension": "oboonakemofpalcgghocfoadofidjkkk",
+        "global": false
+      },
+      "linux:Ctrl+Shift+S": {
+        "command_name": "_execute_action",
+        "extension": "ekhagklcjbdpajgpjgmbionohlpdbjgc",
+        "global": false
+      }
+    },
+    "helium.browser": {
+      "layout": 0,
+      "rounded_frame": false,
+      "zen_mode": false,
+      "zen_mode_top_chrome_pinned": true
+    },
+    "helium.completed_onboarding": true,
+    "helium.settings": {
+      "behavior": {
+        "vertical_collapse_shortcut": false
+      }
+    },
+    "homepage": "http://google.com/",
+    "homepage_is_newtabpage": false,
+    "intl.selected_languages": "en-US,en",
+    "ntp.custom_links_visible": true,
+    "ntp.personal_shortcuts_visible": true,
+    "ntp.shortcust_visible": true,
+    "search.suggest_enabled": true,
+    "session.restore_on_startup": 1,
+    "side_panel": {
+      "is_right_aligned": true
+    },
+    "spellcheck": {
+      "dictionaries": [],
+      "dictionary": "",
+      "use_spelling_service": false
+    },
+    "toolbar.pinned_actions": [
+      "kActionShowChromeLabs",
+      "kActionShowDownloads",
+      "kActionTaskManager",
+      "kActionTabSearch"
+    ],
+    "vertical_tabs": {
+      "collapsed_state": false,
+      "uncollapsed_width": 200
+    }
+  }
+}

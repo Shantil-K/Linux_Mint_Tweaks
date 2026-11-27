@@ -1,0 +1,127 @@
+{
+    "head0": {
+        "type": "header",
+        "description": "Settings for the CPU Load desklet"
+    },
+    "head1": {
+        "type": "header",
+        "description": "General"
+    },
+    "per-core": {
+        "type": "checkbox",
+        "description": "Show all CPU cores",
+        "default": true,
+        "tooltip": "Display utilization of each CPU core rather than total CPU utilization.",
+        "value": false
+    },
+    "refresh-interval": {
+        "type": "spinbutton",
+        "default": 5,
+        "step": 1,
+        "min": 1,
+        "max": 15,
+        "units": "seconds",
+        "description": "Refresh interval",
+        "tooltip": "Increase or decrease refresh interval in seconds.",
+        "value": 2
+    },
+    "head2": {
+        "type": "header",
+        "description": "Layout"
+    },
+    "design": {
+        "type": "combobox",
+        "default": "thick",
+        "description": "Design",
+        "options": {
+            "Thin": "thin",
+            "Compact": "compact",
+            "Thick": "thick"
+        },
+        "value": "thick"
+    },
+    "circle": {
+        "type": "combobox",
+        "default": "speedometer",
+        "description": "Circle",
+        "options": {
+            "Speedometer": "speedometer",
+            "Full Circle": "full-circle"
+        },
+        "value": "speedometer"
+    },
+    "scale-size": {
+        "type": "spinbutton",
+        "default": 1,
+        "min": 0.4,
+        "max": 10,
+        "step": 0.05,
+        "units": "scale factor",
+        "description": "Desklet size",
+        "tooltip": "Increase or decrease the size of the desklet.",
+        "value": 1
+    },
+    "number-of-columns": {
+        "type": "spinbutton",
+        "default": 2,
+        "step": 1,
+        "min": 1,
+        "max": 16,
+        "units": "columns",
+        "description": "Number of columns",
+        "tooltip": "Increase or decrease number of columns.",
+        "value": 4
+    },
+    "head3": {
+        "type": "header",
+        "description": "Colors"
+    },
+    "font-color": {
+        "type": "colorchooser",
+        "default": "rgba(255,255,255,1.0)",
+        "description": "Font color",
+        "value": "rgba(255,255,255,1.0)"
+    },
+    "color-theme": {
+        "type": "combobox",
+        "default": "random",
+        "description": "Color theme",
+        "options": {
+            "Random": "random",
+            "Static": "static",
+            "Dynamic": "dynamic"
+        },
+        "value": "random"
+    },
+    "static-theme-color": {
+        "type": "colorchooser",
+        "default": "rgba(83,199,160,1.0)",
+        "description": "Static theme color",
+        "value": "rgba(83,199,160,1.0)"
+    },
+    "head4": {
+        "type": "header",
+        "description": "Background"
+    },
+    "desklet-background-color": {
+        "type": "colorchooser",
+        "default": "rgba(0,0,0,0)",
+        "description": "Desklet background",
+        "tooltip": "Background color for the whole desklet face. Use the alpha slider in the color picker to set transparency - alpha 0 keeps it fully see-through, matching the old behavior.",
+        "value": "rgba(0,0,0,0)"
+    },
+    "show-background": {
+        "type": "checkbox",
+        "description": "Show gauge track",
+        "default": true,
+        "tooltip": "Show a faint ring behind each CPU gauge. This is separate from the desklet background above.",
+        "value": true
+    },
+    "hide-decorations": {
+        "type": "checkbox",
+        "description": "Hide decorations",
+        "default": false,
+        "value": true
+    },
+    "__md5__": "e5d54add0b832c41b7aa6c06f76ff28d"
+}

@@ -1,0 +1,74 @@
+#!/bin/sh
+# Top GRUB menu entries, the same as the old Grub Customizer setup, without Grub Customizer:
+#   Windows Boot Manager   (through HackBGRT if it's on the EFI partition, for the custom boot logo)
+#   Linux Mint             (always boots the newest kernel through the vmlinuz/initrd.img symlinks)
+#   WBM OEM                (Windows Boot Manager directly, only listed when HackBGRT is used)
+# Installed as /etc/grub.d/09_custom_entries; runs on every update-grub, so UUIDs are found each time.
+set -e
+. /usr/share/grub/grub-mkconfig_lib
+
+ESP=/boot/efi
+ROOT_UUID=$(grub-probe --target=fs_uuid / 2>/dev/null) || exit 0
+
+# Kernel symlinks: Ubuntu-based Mint keeps them in /boot, LMDE (Debian) at /.
+if [ -e /boot/vmlinuz ] && [ -e /boot/initrd.img ]; then
+    KERNEL=/boot/vmlinuz; INITRD=/boot/initrd.img
+elif [ -e /vmlinuz ] && [ -e /initrd.img ]; then
+    KERNEL=/vmlinuz; INITRD=/initrd.img
+else
+    KERNEL=""
+fi
+
+windows_entry() {   # $1 = title, $2 = EFI loader path on the ESP
+    cat <<ENTRY
+menuentry "$1" --class windows --class os {
+	insmod part_gpt
+	insmod fat
+	search --no-floppy --fs-uuid --set=root $ESP_UUID
+	chainloader $2
+}
+ENTRY
+}
+
+HAS_WINDOWS=0
+if mountpoint -q "$ESP" && [ -f "$ESP/EFI/Microsoft/Boot/bootmgfw.efi" ]; then
+    HAS_WINDOWS=1
+    ESP_UUID=$(grub-probe --target=fs_uuid "$ESP")
+fi
+HAS_HACKBGRT=0
+[ "$HAS_WINDOWS" = 1 ] && [ -f "$ESP/EFI/HackBGRT/loader.efi" ] && HAS_HACKBGRT=1
+
+if [ "$HAS_HACKBGRT" = 1 ]; then
+    windows_entry "Windows Boot Manager" /EFI/HackBGRT/loader.efi
+elif [ "$HAS_WINDOWS" = 1 ]; then
+    windows_entry "Windows Boot Manager" /EFI/Microsoft/Boot/bootmgfw.efi
+fi
+
+if [ -n "$KERNEL" ]; then
+    echo "Found Linux Mint entry: $KERNEL" >&2
+    # Ubuntu's GRUB defines recordfail/load_video in 00_header and uses the vt.handoff splash;
+    # Debian's (LMDE) doesn't, so its entry is kept minimal.
+    if grep -q recordfail /etc/grub.d/00_header 2>/dev/null; then
+        UBUNTU_LINES='	recordfail
+	load_video
+	set gfxpayload=keep'
+        HANDOFF=vt.handoff=7
+    else
+        UBUNTU_LINES='	insmod all_video'
+        HANDOFF=""
+    fi
+    cat <<ENTRY
+menuentry "Linux Mint" --class linuxmint --class gnu-linux --class gnu --class os \$menuentry_id_option 'gnulinux-simple-$ROOT_UUID' {
+$UBUNTU_LINES
+	insmod gzio
+	insmod part_gpt
+	insmod ext2
+	search --no-floppy --fs-uuid --set=root $ROOT_UUID
+	linux	$KERNEL root=UUID=$ROOT_UUID ro $GRUB_CMDLINE_LINUX $GRUB_CMDLINE_LINUX_DEFAULT $HANDOFF
+	initrd	$INITRD
+}
+ENTRY
+fi
+
+[ "$HAS_HACKBGRT" = 1 ] && windows_entry "WBM OEM" /EFI/Microsoft/Boot/bootmgfw.efi
+exit 0

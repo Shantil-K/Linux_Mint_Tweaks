@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Exec=sh -c "sleep 4; xinput set-prop 'DELL0949:00 04F3:30CB Touchpad' 'Synaptics Scrolling Distance' -80 -80"
+X-GNOME-Autostart-enabled=true
+NoDisplay=false
+Hidden=false
+Name[en]=Touchpad scroll fix Chromium
+Comment[en]=No description
+X-GNOME-Autostart-Delay=0

@@ -1,0 +1,116 @@
+# Packages installed on top of a fresh Linux Mint, grouped by purpose.
+# restore.sh installs every line that isn't a comment and skips names the new release doesn't have
+# (it prints them at the end). Comment out anything you no longer want.
+# Packages from third-party repositories are listed in repos.conf, not here.
+
+# --- Shell and terminal
+zsh
+kitty
+lsd
+fzf
+tree
+htop
+iotop
+jq
+xclip
+xdotool
+dos2unix
+tmux
+
+# --- Desktop tools
+papirus-icon-theme
+fastfetch
+copyq
+keepassxc
+rofi
+synaptic
+gdebi-core
+nemo-gtkhash
+nemo-image-converter
+kdeconnect
+remmina
+gnome-network-displays
+imagemagick
+libimage-exiftool-perl
+tesseract-ocr
+evtest
+libinput-tools
+xserver-xorg-input-libinput
+vainfo
+vulkan-tools
+intel-gpu-tools
+zram-tools
+mint-meta-codecs
+libdvdcss2
+
+# --- Media
+ffmpeg
+obs-studio
+libavcodec-extra
+gstreamer1.0-libav
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+gstreamer1.0-vaapi
+vlc-plugin-base
+vlc-plugin-bittorrent
+python3-mpv
+
+# --- Android and phones
+adb
+fastboot
+android-sdk-platform-tools
+heimdall-flash
+abootimg
+mtp-tools
+jmtpfs
+
+# --- Development
+git
+python3-pip
+python3-venv
+pipx
+npm
+meson
+ninja-build
+ccache
+llvm
+acpica-tools
+openjdk-21-jdk-headless
+arduino
+build-essential
+
+# --- Network and remote access
+openssh-server
+sshfs
+sshpass
+nmap
+arp-scan
+x11vnc
+tightvncserver
+novnc
+websockify
+samba
+
+# --- Virtualisation and containers
+qemu-system-x86
+qemu-user-static
+virt-manager
+libvirt-daemon-system
+virtiofsd
+bridge-utils
+podman
+uidmap
+
+# --- Servers (comment out what you no longer use)
+nginx
+mysql-server
+postgresql
+
+# --- Windows files
+cabextract
+wimtools
+unshield
+nsis
+
+# --- Games
+steam-installer

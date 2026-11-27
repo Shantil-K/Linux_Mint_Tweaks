@@ -1,0 +1,7 @@
+# Global npm packages (installed into ~/.npm-global by restore.sh --with-dev)
+@google/gemini-cli
+@qwen-code/qwen-code
+@webos-tools/cli
+cf
+lg-ipk
+rea-agents

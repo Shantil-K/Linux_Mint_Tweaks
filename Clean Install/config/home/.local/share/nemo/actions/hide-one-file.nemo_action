@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Hide This One File
+Comment=Test action for a single file
+Exec=@HOME@/.local/bin/hide_file.sh %p
+Icon=@HOME@/.local/share/icons/Windows.png
+Selection=S
+Extensions=all;

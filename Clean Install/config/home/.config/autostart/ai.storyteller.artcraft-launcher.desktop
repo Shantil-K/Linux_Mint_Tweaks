@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ArtCraft Launcher
+Comment=Install and update the Craft App Suite
+Exec="/usr/bin/artcraft-launcher" --hidden
+Icon=ai.storyteller.artcraft-launcher
+Terminal=false
+X-GNOME-Autostart-enabled=true

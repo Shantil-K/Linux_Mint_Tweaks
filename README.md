@@ -19,6 +19,7 @@ Personal repository for Linux Mint customizations, scripts, and tweaks.
 - [G-Mode Fan Boost (Dell G3)](#g-mode-fan-boost-dell-g3)
 - [Battery Charge Limit](#battery-charge-limit)
 - [Linux Mint Shortcuts](#linux-mint-shortcuts)
+- [Clean Install (backup and restore everything)](#clean-install)
 
 ---
 
@@ -190,3 +191,19 @@ See [Battery Charge Limit](Battery%20Charge%20Limit/) for the script, manual com
 Keyboard shortcut helpers for Cinnamon. `super_switch.sh` makes one shortcut do two things: in a fullscreen window it sends `Super+S` (to show the panel/desklets), otherwise it sends `Shift+Super+Home` (to open the menu). Needs `xdotool` and X11.
 
 See [Linux Mint Shortcuts](Linux%20Mint%20Shortcuts/) for setup.
+
+---
+
+# Clean Install
+
+Back up this whole setup and put it back on a fresh Linux Mint, LMDE or newer Mint: apps and repositories, Cinnamon panels, applets, shortcuts and themes, kitty and zsh, Helium settings, the GRUB menu, `/etc` tweaks, and this repo's fingerprint and G-Mode installers. Secrets (SSH keys, browser logins, Wi-Fi passwords, tokens) go into a separate private archive that is never committed.
+
+See [Clean Install](Clean%20Install/) for the install-time partition choices and every step.
+
+### Quick Start
+```bash
+# old system
+cd "Clean Install" && ./backup.sh        # copy ~/mint-private-backup-<date>.tar to a USB drive
+# new system
+cd "Clean Install" && ./restore.sh --private /media/$USER/<usb>/mint-private-backup-<date>.tar
+```
